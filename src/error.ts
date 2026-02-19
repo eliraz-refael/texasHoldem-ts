@@ -81,6 +81,27 @@ export class HandInProgress extends Data.TaggedError("HandInProgress")<{}> {}
 export class NoHandInProgress extends Data.TaggedError("NoHandInProgress")<{}> {}
 
 // ---------------------------------------------------------------------------
+// Deck / card errors
+// ---------------------------------------------------------------------------
+
+/** The deck does not contain enough cards for the requested operation. */
+export class DeckExhausted extends Data.TaggedError("DeckExhausted")<{
+  readonly requested: number;
+  readonly remaining: number;
+}> {}
+
+/** A card string could not be parsed. */
+export class InvalidCard extends Data.TaggedError("InvalidCard")<{
+  readonly input: string;
+  readonly reason: string;
+}> {}
+
+/** Table configuration is invalid. */
+export class InvalidConfig extends Data.TaggedError("InvalidConfig")<{
+  readonly reason: string;
+}> {}
+
+// ---------------------------------------------------------------------------
 // Union type
 // ---------------------------------------------------------------------------
 
@@ -100,4 +121,7 @@ export type PokerError =
   | TableFull
   | NotEnoughPlayers
   | HandInProgress
-  | NoHandInProgress;
+  | NoHandInProgress
+  | DeckExhausted
+  | InvalidCard
+  | InvalidConfig;

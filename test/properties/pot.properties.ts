@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { Chips, SeatIndex } from "../../src/brand.js";
+import { Chips, SeatIndex, chipsToNumber } from "../../src/brand.js";
 import { collectBets, totalPotSize } from "../../src/pot.js";
 import type { BettingPlayer } from "../../src/pot.js";
 
@@ -16,9 +16,6 @@ const arbBettingPlayer = (seat: number) =>
     isAllIn: fc.boolean(),
   });
 
-/**
- * Generate a list of 2-10 BettingPlayers with unique, consecutive seat indices.
- */
 const arbBettingPlayers = fc
   .integer({ min: 2, max: 10 })
   .chain((count) =>
@@ -34,12 +31,12 @@ describe("pot / collectBets — property-based", () => {
     fc.assert(
       fc.property(arbBettingPlayers, (players) => {
         const totalBetsBefore = players.reduce(
-          (sum, p) => sum + (p.currentBet as number),
+          (sum, p) => sum + chipsToNumber(p.currentBet),
           0,
         );
 
         const { pots } = collectBets(players, []);
-        const potTotal = totalPotSize(pots) as number;
+        const potTotal = chipsToNumber(totalPotSize(pots));
 
         expect(potTotal).toBe(totalBetsBefore);
       }),
@@ -52,7 +49,7 @@ describe("pot / collectBets — property-based", () => {
         const { players: updatedPlayers } = collectBets(players, []);
 
         for (const p of updatedPlayers) {
-          expect(p.currentBet as number).toBe(0);
+          expect(chipsToNumber(p.currentBet)).toBe(0);
         }
       }),
     );
@@ -61,17 +58,16 @@ describe("pot / collectBets — property-based", () => {
   it("non-folded players who bet > 0 are eligible for at least the first pot", () => {
     fc.assert(
       fc.property(arbBettingPlayers, (players) => {
-        // Only meaningful when at least one player has a non-zero bet.
-        const hasBets = players.some((p) => (p.currentBet as number) > 0);
-        if (!hasBets) return; // trivially true — no pots created
+        const hasBets = players.some((p) => chipsToNumber(p.currentBet) > 0);
+        if (!hasBets) return;
 
         const { pots } = collectBets(players, []);
-        if (pots.length === 0) return; // no pots were created
+        if (pots.length === 0) return;
 
         const firstPot = pots[0]!;
 
         for (const p of players) {
-          if (!p.isFolded && (p.currentBet as number) > 0) {
+          if (!p.isFolded && chipsToNumber(p.currentBet) > 0) {
             expect(firstPot.eligibleSeats).toContain(p.seatIndex);
           }
         }
@@ -85,7 +81,6 @@ describe("pot / collectBets — property-based", () => {
         arbBettingPlayers,
         fc.integer({ min: 0, max: 5000 }).map((n) => Chips(n)),
         (players, existingAmount) => {
-          // Create a single existing pot containing all player seats.
           const existingPots = [
             {
               amount: existingAmount,
@@ -94,14 +89,14 @@ describe("pot / collectBets — property-based", () => {
           ];
 
           const totalBetsBefore = players.reduce(
-            (sum, p) => sum + (p.currentBet as number),
+            (sum, p) => sum + chipsToNumber(p.currentBet),
             0,
           );
 
           const { pots } = collectBets(players, existingPots);
-          const potTotal = totalPotSize(pots) as number;
+          const potTotal = chipsToNumber(totalPotSize(pots));
 
-          expect(potTotal).toBe(totalBetsBefore + (existingAmount as number));
+          expect(potTotal).toBe(totalBetsBefore + chipsToNumber(existingAmount));
         },
       ),
     );
@@ -112,13 +107,12 @@ describe("pot / collectBets — property-based", () => {
       fc.property(arbBettingPlayers, (players) => {
         const distinctBetLevels = new Set(
           players
-            .filter((p) => (p.currentBet as number) > 0)
-            .map((p) => p.currentBet as number),
+            .filter((p) => chipsToNumber(p.currentBet) > 0)
+            .map((p) => chipsToNumber(p.currentBet)),
         );
 
         const { pots } = collectBets(players, []);
 
-        // The algorithm produces at most one pot per distinct bet level.
         expect(pots.length).toBeLessThanOrEqual(
           Math.max(distinctBetLevels.size, 0),
         );

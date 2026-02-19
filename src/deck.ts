@@ -1,7 +1,8 @@
-import { Effect, Random, Chunk } from "effect";
+import { Array as A, Chunk, Effect, Either, HashMap, Random, pipe } from "effect";
 import type { Card } from "./card.js";
 import { ALL_CARDS } from "./card.js";
 import type { SeatIndex } from "./brand.js";
+import { DeckExhausted } from "./error.js";
 
 // ---------------------------------------------------------------------------
 // Deck type
@@ -32,18 +33,20 @@ export const shuffled: Effect.Effect<Deck> = Effect.map(
 /**
  * Draw `count` cards from the top of the deck.
  *
- * @returns A tuple of `[drawn, remaining]`.
- * @throws {Error} If the deck does not contain enough cards (programming error).
+ * @returns Either a tuple of `[drawn, remaining]`, or `DeckExhausted`.
  */
-export function draw(deck: Deck, count: number): [readonly Card[], Deck] {
+export function draw(
+  deck: Deck,
+  count: number,
+): Either.Either<[readonly Card[], Deck], DeckExhausted> {
   if (count > deck.length) {
-    throw new Error(
-      `Cannot draw ${count} card(s) from a deck with ${deck.length} card(s)`,
+    return Either.left(
+      new DeckExhausted({ requested: count, remaining: deck.length }),
     );
   }
-  const drawn: readonly Card[] = deck.slice(0, count);
-  const remaining: Deck = deck.slice(count);
-  return [drawn, remaining];
+  const drawn: readonly Card[] = A.take(deck, count);
+  const remaining: Deck = A.drop(deck, count);
+  return Either.right([drawn, remaining]);
 }
 
 // ---------------------------------------------------------------------------
@@ -56,31 +59,39 @@ export function draw(deck: Deck, count: number): [readonly Card[], Deck] {
  * Cards are dealt sequentially: seat_0 gets [card_0, card_1],
  * seat_1 gets [card_2, card_3], and so on.
  *
- * @returns A tuple of `[holeCardsMap, remaining]`.
+ * @returns Either a tuple of `[holeCardsMap, remaining]`, or `DeckExhausted`.
  */
 export function dealHoleCards(
   deck: Deck,
   seatOrder: readonly SeatIndex[],
-): [ReadonlyMap<SeatIndex, readonly [Card, Card]>, Deck] {
+): Either.Either<
+  [HashMap.HashMap<SeatIndex, readonly [Card, Card]>, Deck],
+  DeckExhausted
+> {
   const needed = seatOrder.length * 2;
   if (needed > deck.length) {
-    throw new Error(
-      `Cannot deal hole cards to ${seatOrder.length} seat(s): need ${needed} cards but deck has ${deck.length}`,
+    return Either.left(
+      new DeckExhausted({ requested: needed, remaining: deck.length }),
     );
   }
 
-  const map = new Map<SeatIndex, readonly [Card, Card]>();
+  let map = HashMap.empty<SeatIndex, readonly [Card, Card]>();
   let offset = 0;
 
   for (const seat of seatOrder) {
-    const card1 = deck[offset]!;
-    const card2 = deck[offset + 1]!;
-    map.set(seat, [card1, card2] as const);
+    const card1 = deck[offset];
+    const card2 = deck[offset + 1];
+    if (card1 === undefined || card2 === undefined) {
+      return Either.left(
+        new DeckExhausted({ requested: needed, remaining: deck.length }),
+      );
+    }
+    map = HashMap.set(map, seat, [card1, card2] as const);
     offset += 2;
   }
 
-  const remaining: Deck = deck.slice(offset);
-  return [map, remaining];
+  const remaining: Deck = A.drop(deck, offset);
+  return Either.right([map, remaining]);
 }
 
 // ---------------------------------------------------------------------------
@@ -90,20 +101,28 @@ export function dealHoleCards(
 /**
  * Deal the flop: burn one card, then deal three.
  *
- * @returns A tuple of `[flop, remaining]` where `flop` is exactly 3 cards.
+ * @returns Either a tuple of `[flop, remaining]`, or `DeckExhausted`.
  */
 export function dealFlop(
   deck: Deck,
-): [readonly [Card, Card, Card], Deck] {
+): Either.Either<[readonly [Card, Card, Card], Deck], DeckExhausted> {
   if (deck.length < 4) {
-    throw new Error(
-      `Cannot deal flop: need 4 cards (1 burn + 3 flop) but deck has ${deck.length}`,
+    return Either.left(
+      new DeckExhausted({ requested: 4, remaining: deck.length }),
     );
   }
   // burn 1, deal 3
-  const flop = [deck[1]!, deck[2]!, deck[3]!] as const;
-  const remaining: Deck = deck.slice(4);
-  return [flop, remaining];
+  const c1 = deck[1];
+  const c2 = deck[2];
+  const c3 = deck[3];
+  if (c1 === undefined || c2 === undefined || c3 === undefined) {
+    return Either.left(
+      new DeckExhausted({ requested: 4, remaining: deck.length }),
+    );
+  }
+  const flop = [c1, c2, c3] as const;
+  const remaining: Deck = A.drop(deck, 4);
+  return Either.right([flop, remaining]);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,16 +133,23 @@ export function dealFlop(
  * Deal a single community card: burn one, deal one.
  * Used for the turn and river.
  *
- * @returns A tuple of `[card, remaining]`.
+ * @returns Either a tuple of `[card, remaining]`, or `DeckExhausted`.
  */
-export function dealOne(deck: Deck): [Card, Deck] {
+export function dealOne(
+  deck: Deck,
+): Either.Either<[Card, Deck], DeckExhausted> {
   if (deck.length < 2) {
-    throw new Error(
-      `Cannot deal one card: need 2 cards (1 burn + 1 deal) but deck has ${deck.length}`,
+    return Either.left(
+      new DeckExhausted({ requested: 2, remaining: deck.length }),
     );
   }
   // burn 1, deal 1
-  const card = deck[1]!;
-  const remaining: Deck = deck.slice(2);
-  return [card, remaining];
+  const dealtCard = deck[1];
+  if (dealtCard === undefined) {
+    return Either.left(
+      new DeckExhausted({ requested: 2, remaining: deck.length }),
+    );
+  }
+  const remaining: Deck = A.drop(deck, 2);
+  return Either.right([dealtCard, remaining]);
 }

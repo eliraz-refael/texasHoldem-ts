@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { Chips, SeatIndex } from "../../src/brand.js";
-import { createPlayer } from "../../src/player.js";
+import { Chips, chipsToNumber } from "../../src/brand.js";
 import {
   createBettingRound,
   applyAction,
@@ -9,47 +8,15 @@ import {
   getLegalActions,
 } from "../../src/betting.js";
 import type { BettingRoundState } from "../../src/betting.js";
-import { Fold, Check, Call, AllIn } from "../../src/action.js";
+import { Fold, Check, Call, AllIn, Raise, Bet } from "../../src/action.js";
 import type { Action } from "../../src/action.js";
-import { Either } from "effect";
+import { Either, Option } from "effect";
+import { arbPlayers } from "../arbitraries.js";
 
 // ---------------------------------------------------------------------------
 // Arbitraries
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a list of 2-6 players with unique seat indices and random stacks.
- * Stacks range from 1 to 10_000 to keep things realistic.
- */
-const arbPlayers = fc
-  .integer({ min: 2, max: 6 })
-  .chain((count) => {
-    // Pick `count` unique seat indices from 0..9
-    return fc
-      .shuffledSubarray(
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-        { minLength: count, maxLength: count },
-      )
-      .chain((seats) => {
-        const sorted = [...seats].sort((a, b) => a - b);
-        return fc.tuple(
-          fc.constant(sorted),
-          fc.tuple(
-            ...sorted.map(() =>
-              fc.integer({ min: 1, max: 10_000 }).map((n) => Chips(n)),
-            ),
-          ),
-        );
-      });
-  })
-  .map(([seats, chipStacks]) =>
-    seats.map((s, i) => createPlayer(SeatIndex(s), chipStacks[i]!)),
-  );
-
-/**
- * Generate a valid BettingRoundState from a random set of players.
- * Uses biggestBet=0 and minRaise equal to a small blind amount (e.g. 10).
- */
 const arbBettingRound = arbPlayers.map((players) => {
   const firstSeat = players[0]!.seatIndex;
   return createBettingRound("test", players, firstSeat, Chips(0), Chips(10));
@@ -59,48 +26,35 @@ const arbBettingRound = arbPlayers.map((players) => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Given a BettingRoundState and a choice index, pick and apply a valid action
- * from the set of legal actions. The choice index is used modulo the number of
- * available actions to select deterministically. Returns the new state, or the
- * same state if the round is already complete.
- */
 function playActionByChoice(
   state: BettingRoundState,
   choice: number,
 ): BettingRoundState {
   const seat = activePlayer(state);
-  if (seat === null) return state;
+  if (Option.isNone(seat)) return state;
 
   const legal = getLegalActions(state);
 
-  // Build a list of valid simple actions to choose from.
   const candidates: Action[] = [];
   if (legal.canFold) candidates.push(Fold);
   if (legal.canCheck) candidates.push(Check);
-  if (legal.callAmount !== null) candidates.push(Call);
+  if (Option.isSome(legal.callAmount)) candidates.push(Call);
   if (legal.canAllIn) candidates.push(AllIn);
 
-  // Should never be empty when a player is active, but guard just in case.
   if (candidates.length === 0) return state;
 
   const idx = ((choice % candidates.length) + candidates.length) % candidates.length;
   const action = candidates[idx]!;
 
-  const result = applyAction(state, seat, action);
+  const result = applyAction(state, seat.value, action);
   if (Either.isRight(result)) return result.right.state;
 
-  // Action was rejected -- fall back to fold (always legal).
-  const foldResult = applyAction(state, seat, Fold);
+  const foldResult = applyAction(state, seat.value, Fold);
   if (Either.isRight(foldResult)) return foldResult.right.state;
 
-  return state; // should not happen
+  return state;
 }
 
-/**
- * Play actions until the round completes or the maximum iteration count is hit.
- * Returns [finalState, actionCount].
- */
 function playUntilComplete(
   state: BettingRoundState,
   choices: readonly number[],
@@ -124,15 +78,15 @@ describe("betting round -- property-based", () => {
     fc.assert(
       fc.property(arbBettingRound, (state) => {
         const seat = activePlayer(state);
-        if (seat === null) return; // round already complete
+        if (Option.isNone(seat)) return;
 
         const legal = getLegalActions(state);
 
         const hasAction =
           legal.canFold ||
           legal.canCheck ||
-          legal.callAmount !== null ||
-          legal.minBet !== null ||
+          Option.isSome(legal.callAmount) ||
+          Option.isSome(legal.minBet) ||
           legal.canAllIn;
 
         expect(hasAction).toBe(true);
@@ -147,7 +101,7 @@ describe("betting round -- property-based", () => {
         fc.constantFrom("fold", "check", "call", "allIn"),
         (state, actionType) => {
           const seat = activePlayer(state);
-          if (seat === null) return;
+          if (Option.isNone(seat)) return;
 
           const legal = getLegalActions(state);
 
@@ -161,7 +115,7 @@ describe("betting round -- property-based", () => {
               action = Check;
               break;
             case "call":
-              if (legal.callAmount === null) return;
+              if (Option.isNone(legal.callAmount)) return;
               action = Call;
               break;
             case "allIn":
@@ -170,12 +124,12 @@ describe("betting round -- property-based", () => {
               break;
           }
 
-          const result = applyAction(state, seat, action);
-          if (Either.isLeft(result)) return; // invalid action -- skip
+          const result = applyAction(state, seat.value, action);
+          if (Either.isLeft(result)) return;
 
           const newState = result.right.state;
           for (const p of newState.players) {
-            expect(p.chips as number).toBeGreaterThanOrEqual(0);
+            expect(chipsToNumber(p.chips)).toBeGreaterThanOrEqual(0);
           }
         },
       ),
@@ -186,19 +140,17 @@ describe("betting round -- property-based", () => {
     fc.assert(
       fc.property(arbBettingRound, (state) => {
         const seat = activePlayer(state);
-        if (seat === null) return;
+        if (Option.isNone(seat)) return;
 
-        const result = applyAction(state, seat, Fold);
-        if (Either.isLeft(result)) return; // shouldn't happen -- fold is always legal
+        const result = applyAction(state, seat.value, Fold);
+        if (Either.isLeft(result)) return;
 
         const newState = result.right.state;
 
-        // The folded player should not appear in the active seat order.
-        expect(newState.activeSeatOrder).not.toContain(seat);
+        expect(newState.activeSeatOrder).not.toContain(seat.value);
 
-        // The folded player should be marked as folded.
         const foldedPlayer = newState.players.find(
-          (p) => p.seatIndex === seat,
+          (p) => p.seatIndex === seat.value,
         );
         expect(foldedPlayer).toBeDefined();
         expect(foldedPlayer!.isFolded).toBe(true);
@@ -235,15 +187,14 @@ describe("betting round -- property-based", () => {
     fc.assert(
       fc.property(arbBettingRound, (state) => {
         const seat = activePlayer(state);
-        if (seat === null) return;
+        if (Option.isNone(seat)) return;
 
         const legal = getLegalActions(state);
-        const player = state.players.find((p) => p.seatIndex === seat)!;
+        const player = state.players.find((p) => p.seatIndex === seat.value)!;
 
         if (legal.canCheck) {
-          // Player's current bet must match or exceed the biggest bet
-          expect(player.currentBet as number).toBeGreaterThanOrEqual(
-            state.biggestBet as number,
+          expect(chipsToNumber(player.currentBet)).toBeGreaterThanOrEqual(
+            chipsToNumber(state.biggestBet),
           );
         }
       }),
@@ -254,20 +205,20 @@ describe("betting round -- property-based", () => {
     fc.assert(
       fc.property(arbBettingRound, (state) => {
         const seat = activePlayer(state);
-        if (seat === null) return;
+        if (Option.isNone(seat)) return;
 
         const legal = getLegalActions(state);
         if (!legal.canAllIn) return;
 
-        const result = applyAction(state, seat, AllIn);
+        const result = applyAction(state, seat.value, AllIn);
         if (Either.isLeft(result)) return;
 
         const newState = result.right.state;
         const updatedPlayer = newState.players.find(
-          (p) => p.seatIndex === seat,
+          (p) => p.seatIndex === seat.value,
         );
         expect(updatedPlayer).toBeDefined();
-        expect(updatedPlayer!.chips as number).toBe(0);
+        expect(chipsToNumber(updatedPlayer!.chips)).toBe(0);
         expect(updatedPlayer!.isAllIn).toBe(true);
       }),
     );
@@ -280,7 +231,7 @@ describe("betting round -- property-based", () => {
         fc.constantFrom("fold", "check", "call", "allIn"),
         (state, actionType) => {
           const seat = activePlayer(state);
-          if (seat === null) return;
+          if (Option.isNone(seat)) return;
 
           const legal = getLegalActions(state);
 
@@ -294,7 +245,7 @@ describe("betting round -- property-based", () => {
               action = Check;
               break;
             case "call":
-              if (legal.callAmount === null) return;
+              if (Option.isNone(legal.callAmount)) return;
               action = Call;
               break;
             case "allIn":
@@ -303,26 +254,78 @@ describe("betting round -- property-based", () => {
               break;
           }
 
-          // Total chips = sum of (chips + currentBet) for all players
           const totalBefore = state.players.reduce(
             (sum, p) =>
-              sum + (p.chips as number) + (p.currentBet as number),
+              sum + chipsToNumber(p.chips) + chipsToNumber(p.currentBet),
             0,
           );
 
-          const result = applyAction(state, seat, action);
+          const result = applyAction(state, seat.value, action);
           if (Either.isLeft(result)) return;
 
           const newState = result.right.state;
           const totalAfter = newState.players.reduce(
             (sum, p) =>
-              sum + (p.chips as number) + (p.currentBet as number),
+              sum + chipsToNumber(p.chips) + chipsToNumber(p.currentBet),
             0,
           );
 
           expect(totalAfter).toBe(totalBefore);
         },
       ),
+    );
+  });
+
+  it("calling sets currentBet equal to biggestBet (unless short all-in)", () => {
+    fc.assert(
+      fc.property(arbBettingRound, (state) => {
+        const seat = activePlayer(state);
+        if (Option.isNone(seat)) return;
+
+        const legal = getLegalActions(state);
+        if (Option.isNone(legal.callAmount)) return;
+
+        const result = applyAction(state, seat.value, Call);
+        if (Either.isLeft(result)) return;
+
+        const newState = result.right.state;
+        const updatedPlayer = newState.players.find(
+          (p) => p.seatIndex === seat.value,
+        );
+        expect(updatedPlayer).toBeDefined();
+
+        if (updatedPlayer!.isAllIn) {
+          // short all-in: currentBet may be less than biggestBet
+          expect(chipsToNumber(updatedPlayer!.currentBet)).toBeLessThanOrEqual(
+            chipsToNumber(newState.biggestBet),
+          );
+        } else {
+          expect(chipsToNumber(updatedPlayer!.currentBet)).toBe(
+            chipsToNumber(newState.biggestBet),
+          );
+        }
+      }),
+    );
+  });
+
+  it("after a raise, biggestBet strictly increases", () => {
+    fc.assert(
+      fc.property(arbBettingRound, (state) => {
+        const seat = activePlayer(state);
+        if (Option.isNone(seat)) return;
+
+        const legal = getLegalActions(state);
+        if (Option.isNone(legal.minRaise)) return;
+
+        const raiseAmount = legal.minRaise.value;
+        const result = applyAction(state, seat.value, Raise({ amount: raiseAmount }));
+        if (Either.isLeft(result)) return;
+
+        const newState = result.right.state;
+        expect(chipsToNumber(newState.biggestBet)).toBeGreaterThan(
+          chipsToNumber(state.biggestBet),
+        );
+      }),
     );
   });
 });

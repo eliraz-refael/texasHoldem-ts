@@ -8,7 +8,8 @@
  * @module
  */
 
-import { Schema } from "effect";
+import { Array as A, Data, Either, Schema, pipe } from "effect";
+import { InvalidCard } from "./error.js";
 
 // ---------------------------------------------------------------------------
 // Rank
@@ -36,22 +37,24 @@ export const SUITS: readonly Suit[] = ["c", "d", "h", "s"] as const;
 // Card
 // ---------------------------------------------------------------------------
 
-/** An immutable playing card. */
+/** An immutable playing card with structural equality via Data.struct. */
 export interface Card {
   readonly rank: Rank;
   readonly suit: Suit;
 }
 
-/** Construct a Card value. */
-export const card = (rank: Rank, suit: Suit): Card => ({ rank, suit });
+/** Construct a Card value with structural equality. */
+export const card = (rank: Rank, suit: Suit): Card =>
+  Data.struct({ rank, suit });
 
 // ---------------------------------------------------------------------------
 // ALL_CARDS
 // ---------------------------------------------------------------------------
 
 /** Standard 52-card deck (RANKS x SUITS, ordered rank-major). */
-export const ALL_CARDS: readonly Card[] = RANKS.flatMap((rank) =>
-  SUITS.map((suit) => card(rank, suit)),
+export const ALL_CARDS: readonly Card[] = pipe(
+  RANKS,
+  A.flatMap((rank) => A.map(SUITS, (suit) => card(rank, suit))),
 );
 
 // ---------------------------------------------------------------------------
@@ -105,31 +108,55 @@ export const toPokersolverString = (c: Card): string =>
 /**
  * Parse a two-character pokersolver string back into a Card.
  *
- * @throws {Error} if the string is not a valid card representation.
- *
- * @example
- *   cardFromString("As"); // { rank: 14, suit: "s" }
- *   cardFromString("Th"); // { rank: 10, suit: "h" }
+ * Returns `Either.right(Card)` on success, or `Either.left(InvalidCard)` on
+ * failure.
  */
-export const cardFromString = (s: string): Card => {
+export const cardFromString = (s: string): Either.Either<Card, InvalidCard> => {
   if (s.length !== 2) {
-    throw new Error(`Invalid card string (expected 2 chars): "${s}"`);
+    return Either.left(
+      new InvalidCard({
+        input: s,
+        reason: `Expected 2 chars, got ${s.length}`,
+      }),
+    );
   }
 
-  const rankChar = s[0]!;
-  const suitChar = s[1]!;
+  const rankChar = s[0];
+  const suitChar = s[1];
+  if (rankChar === undefined || suitChar === undefined) {
+    return Either.left(
+      new InvalidCard({ input: s, reason: `Expected 2 chars, got ${s.length}` }),
+    );
+  }
 
   const rank = CHAR_TO_RANK[rankChar];
   if (rank === undefined) {
-    throw new Error(`Invalid rank character: "${rankChar}"`);
+    return Either.left(
+      new InvalidCard({
+        input: s,
+        reason: `Invalid rank character: "${rankChar}"`,
+      }),
+    );
   }
 
   if (!VALID_SUITS.has(suitChar)) {
-    throw new Error(`Invalid suit character: "${suitChar}"`);
+    return Either.left(
+      new InvalidCard({
+        input: s,
+        reason: `Invalid suit character: "${suitChar}"`,
+      }),
+    );
   }
 
-  return card(rank, suitChar as Suit);
+  return Either.right(card(rank, suitChar as Suit));
 };
+
+/**
+ * Parse a card string, throwing on failure.
+ * Convenience for tests and situations where invalid input is a programming error.
+ */
+export const unsafeCardFromString = (s: string): Card =>
+  Either.getOrThrowWith(cardFromString(s), (e) => new Error(e.reason));
 
 // ---------------------------------------------------------------------------
 // Effect Schema (for Arbitrary / fast-check integration)

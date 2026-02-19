@@ -1,5 +1,11 @@
+import { Option } from "effect";
 import type { Chips, SeatIndex } from "./brand.js";
-import { Chips as makeChips } from "./brand.js";
+import {
+  ZERO_CHIPS,
+  addChips,
+  subtractChips,
+  chipsToNumber,
+} from "./brand.js";
 import type { Card } from "./card.js";
 
 // ---------------------------------------------------------------------------
@@ -12,25 +18,21 @@ export interface Player {
   readonly currentBet: Chips;
   readonly isAllIn: boolean;
   readonly isFolded: boolean;
-  readonly holeCards: readonly [Card, Card] | null;
+  readonly holeCards: Option.Option<readonly [Card, Card]>;
 }
 
 // ---------------------------------------------------------------------------
 // createPlayer — construct a fresh player with sensible defaults
 // ---------------------------------------------------------------------------
 
-/**
- * Create a player seated at `seatIndex` with the given chip stack.
- * All hand-related state (bet, flags, cards) starts at zero/false/null.
- */
 export function createPlayer(seatIndex: SeatIndex, chips: Chips): Player {
   return {
     seatIndex,
     chips,
-    currentBet: makeChips(0),
+    currentBet: ZERO_CHIPS,
     isAllIn: false,
     isFolded: false,
-    holeCards: null,
+    holeCards: Option.none(),
   };
 }
 
@@ -38,71 +40,46 @@ export function createPlayer(seatIndex: SeatIndex, chips: Chips): Player {
 // Pure transitions — every function returns a new Player
 // ---------------------------------------------------------------------------
 
-/**
- * Place a bet of `amount` additional chips.
- *
- * - Subtracts `amount` from `chips`.
- * - Adds `amount` to `currentBet`.
- * - If `chips` reaches 0, sets `isAllIn` to true.
- *
- * The caller is responsible for ensuring `amount <= player.chips`.
- */
 export function placeBet(player: Player, amount: Chips): Player {
-  const newChips = makeChips((player.chips as number) - (amount as number));
-  const newCurrentBet = makeChips(
-    (player.currentBet as number) + (amount as number),
-  );
+  const newChips = subtractChips(player.chips, amount);
+  const newCurrentBet = addChips(player.currentBet, amount);
   return {
     ...player,
     chips: newChips,
     currentBet: newCurrentBet,
-    isAllIn: (newChips as number) === 0,
+    isAllIn: chipsToNumber(newChips) === 0,
   };
 }
 
-/** Mark the player as folded. */
 export function fold(player: Player): Player {
   return { ...player, isFolded: true };
 }
 
-/**
- * Award chips to the player (e.g. pot winnings).
- * Adds `amount` to the player's chip stack.
- */
 export function winChips(player: Player, amount: Chips): Player {
   return {
     ...player,
-    chips: makeChips((player.chips as number) + (amount as number)),
+    chips: addChips(player.chips, amount),
   };
 }
 
-/**
- * Reset the player's current bet to 0.
- * Called between betting rounds when bets are collected into the pot.
- */
 export function collectBet(player: Player): Player {
-  return { ...player, currentBet: makeChips(0) };
+  return { ...player, currentBet: ZERO_CHIPS };
 }
 
-/** Set the player's hole cards. */
 export function dealCards(
   player: Player,
   cards: readonly [Card, Card],
 ): Player {
-  return { ...player, holeCards: cards };
+  return { ...player, holeCards: Option.some(cards) };
 }
 
-/**
- * Reset all hand-related state.
- * Called between hands to prepare the player for a new deal.
- */
 export function clearHand(player: Player): Player {
   return {
     ...player,
-    currentBet: makeChips(0),
+    currentBet: ZERO_CHIPS,
     isAllIn: false,
     isFolded: false,
-    holeCards: null,
+    holeCards: Option.none(),
   };
 }
 
@@ -110,18 +87,10 @@ export function clearHand(player: Player): Player {
 // Derived queries
 // ---------------------------------------------------------------------------
 
-/**
- * The player's effective stack: the chips remaining that can still be wagered.
- * Note that `currentBet` is already committed and not part of the effective stack.
- */
 export function effectiveStack(player: Player): Chips {
   return player.chips;
 }
 
-/**
- * Whether this player can still act in the current betting round.
- * A player cannot act if they have folded, are all-in, or have no chips left.
- */
 export function canAct(player: Player): boolean {
-  return !player.isFolded && !player.isAllIn && (player.chips as number) > 0;
+  return !player.isFolded && !player.isAllIn && chipsToNumber(player.chips) > 0;
 }

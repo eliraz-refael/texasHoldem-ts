@@ -1,6 +1,8 @@
+import { Array as A, Either, Order, pipe } from "effect";
 import { Hand as PokersolverHand } from "pokersolver";
 import type { Card } from "./card.js";
 import { toPokersolverString } from "./card.js";
+import { InvalidGameState } from "./error.js";
 
 // ---------------------------------------------------------------------------
 // HandRank — our public type that does NOT leak pokersolver internals
@@ -14,31 +16,49 @@ export interface HandRank {
 }
 
 // ---------------------------------------------------------------------------
+// HandRankOrder
+// ---------------------------------------------------------------------------
+
+/** Order instance for HandRank — higher rank = better hand. */
+export const HandRankOrder: Order.Order<HandRank> = Order.mapInput(
+  Order.number,
+  (h: HandRank) => h.rank,
+);
+
+// ---------------------------------------------------------------------------
 // evaluate — solve a set of cards and return a HandRank
 // ---------------------------------------------------------------------------
 
-export function evaluate(cards: readonly Card[]): HandRank {
-  const psStrings = cards.map(toPokersolverString);
-  const solved = PokersolverHand.solve(psStrings);
-
-  return {
-    name: solved.name,
-    description: solved.descr,
-    rank: solved.rank,
-    bestCards: Object.freeze(
-      solved.cards.map((c) => `${c.value}${c.suit}`),
-    ),
-  };
+export function evaluate(
+  cards: readonly Card[],
+): Either.Either<HandRank, InvalidGameState> {
+  return Either.try({
+    try: () => {
+      const psStrings = cards.map(toPokersolverString);
+      const solved = PokersolverHand.solve(psStrings);
+      return {
+        name: solved.name,
+        description: solved.descr,
+        rank: solved.rank,
+        bestCards: Object.freeze(
+          solved.cards.map((c) => `${c.value}${c.suit}`),
+        ),
+      };
+    },
+    catch: (e) =>
+      new InvalidGameState({
+        state: "evaluate",
+        reason: `pokersolver error: ${e instanceof Error ? e.message : String(e)}`,
+      }),
+  });
 }
 
 // ---------------------------------------------------------------------------
-// compare — compare two HandRanks by rank (higher rank = better hand)
+// compare — compare two HandRanks using HandRankOrder
 // ---------------------------------------------------------------------------
 
 export function compare(a: HandRank, b: HandRank): -1 | 0 | 1 {
-  if (a.rank > b.rank) return 1;
-  if (a.rank < b.rank) return -1;
-  return 0;
+  return HandRankOrder(a, b);
 }
 
 // ---------------------------------------------------------------------------
@@ -46,17 +66,20 @@ export function compare(a: HandRank, b: HandRank): -1 | 0 | 1 {
 // ---------------------------------------------------------------------------
 
 export function winners(hands: readonly HandRank[]): readonly HandRank[] {
-  if (hands.length === 0) return [];
+  const [first, ...rest] = hands;
+  if (first === undefined) return [];
 
-  let best = hands[0]!;
-  for (let i = 1; i < hands.length; i++) {
-    const hand = hands[i]!;
-    if (compare(hand, best) > 0) {
-      best = hand;
-    }
-  }
+  const best = pipe(
+    rest,
+    A.reduce(first, (acc, h) =>
+      Order.greaterThan(HandRankOrder)(h, acc) ? h : acc,
+    ),
+  );
 
-  return Object.freeze(hands.filter((h) => compare(h, best) === 0));
+  return pipe(
+    hands,
+    A.filter((h) => compare(h, best) === 0),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +89,6 @@ export function winners(hands: readonly HandRank[]): readonly HandRank[] {
 export function evaluateHoldem(
   holeCards: readonly Card[],
   communityCards: readonly Card[],
-): HandRank {
+): Either.Either<HandRank, InvalidGameState> {
   return evaluate([...holeCards, ...communityCards]);
 }
