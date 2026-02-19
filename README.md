@@ -1,4 +1,4 @@
-# holdem-engine
+# texasholdem
 
 A modular, functional Texas Hold'em poker engine built with [Effect-TS](https://effect.website/).
 
@@ -19,9 +19,9 @@ Immutable state transitions, typed errors, branded domain types, and event loggi
 ## Install
 
 ```bash
-npm install holdem-engine
+npm install texasholdem
 # or
-pnpm add holdem-engine
+pnpm add texasholdem
 ```
 
 **Peer dependency:** `effect` ^3.12
@@ -42,7 +42,7 @@ import {
   Call,
   Fold,
   Check,
-} from "holdem-engine";
+} from "texasholdem";
 
 // 1. Create a table
 const table = Either.getOrThrow(
