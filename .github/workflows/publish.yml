@@ -22,10 +22,13 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      - run: npm publish --provenance --access public
+
+      - name: Publish with OIDC
+        run: |
+          echo "registry=https://registry.npmjs.org/" > .npmrc
+          npm publish --provenance --access public
