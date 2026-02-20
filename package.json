@@ -1,6 +1,6 @@
 {
   "name": "texasholdem",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Modular, functional Texas Hold'em poker engine built with Effect-TS",
   "type": "module",
   "main": "./dist/index.js",
