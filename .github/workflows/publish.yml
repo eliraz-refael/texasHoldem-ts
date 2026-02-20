@@ -26,7 +26,8 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: npm install -g npm@latest
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      - run: npm publish
+      - run: npm publish --provenance --access public

@@ -3,6 +3,10 @@
   "version": "1.0.1",
   "description": "Modular, functional Texas Hold'em poker engine built with Effect-TS",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eliraz-refael/texasHoldem-ts.git"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
