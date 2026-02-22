@@ -4,9 +4,9 @@
  * @module
  */
 
-import { Data, Either, Match, Option, pipe } from "effect";
+import { Data, Either, Match, Option, Schema, pipe } from "effect";
 import type { Chips } from "./brand.js";
-import { Chips as makeChips, chipsToNumber } from "./brand.js";
+import { Chips as makeChips, chipsToNumber, ChipsSchema } from "./brand.js";
 import { InvalidAction } from "./error.js";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,19 @@ export interface LegalActions {
   readonly canAllIn: boolean;
   readonly allInAmount: Chips;
 }
+
+/** Schema for LegalActions — enables composition in StrategyContextSchema and Arbitrary generation. */
+export const LegalActionsSchema = Schema.Struct({
+  canFold: Schema.Boolean,
+  canCheck: Schema.Boolean,
+  callAmount: Schema.Option(ChipsSchema),
+  minBet: Schema.Option(ChipsSchema),
+  maxBet: Schema.Option(ChipsSchema),
+  minRaise: Schema.Option(ChipsSchema),
+  maxRaise: Schema.Option(ChipsSchema),
+  canAllIn: Schema.Boolean,
+  allInAmount: ChipsSchema,
+});
 
 // ---------------------------------------------------------------------------
 // computeLegalActions
