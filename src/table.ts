@@ -6,7 +6,7 @@
 
 import { Array as A, Effect, Either, HashMap, Option, pipe } from "effect";
 
-import type { Chips, SeatIndex, HandId } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand.js";
 import {
   HandId as makeHandId,
   chipsToNumber,
@@ -211,21 +211,16 @@ export function startNextHand(
     ),
   );
 
-  // Generate HandId via Effect.sync
-  return Effect.flatMap(
-    Effect.sync(() =>
-      makeHandId(`hand_${Date.now()}_${state.handCount + 1}`),
-    ),
-    (handId) =>
-      Effect.map(
-        hand.startHand(players, newButton, state.config.forcedBets, handId),
-        (handState) => ({
-          ...state,
-          button: Option.some(newButton),
-          currentHand: Option.some(handState),
-          handCount: state.handCount + 1,
-        }),
-      ),
+  const handId = makeHandId(`hand_${state.handCount + 1}`);
+
+  return Effect.map(
+    hand.startHand(players, newButton, state.config.forcedBets, handId),
+    (handState) => ({
+      ...state,
+      button: Option.some(newButton),
+      currentHand: Option.some(handState),
+      handCount: state.handCount + 1,
+    }),
   );
 }
 

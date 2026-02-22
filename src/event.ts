@@ -18,7 +18,7 @@ import type { Action } from "./action.js";
 // ---------------------------------------------------------------------------
 
 export type GameEvent = Data.TaggedEnum<{
-  HandStarted: { readonly handId: HandId; readonly button: SeatIndex; readonly players: readonly SeatIndex[] };
+  HandStarted: { readonly handId: HandId; readonly button: SeatIndex; readonly smallBlind: SeatIndex; readonly bigBlind: SeatIndex; readonly players: readonly SeatIndex[] };
   BlindsPosted: { readonly smallBlind: { readonly seat: SeatIndex; readonly amount: Chips }; readonly bigBlind: { readonly seat: SeatIndex; readonly amount: Chips } };
   HoleCardsDealt: { readonly seat: SeatIndex };
   PlayerActed: { readonly seat: SeatIndex; readonly action: Action };

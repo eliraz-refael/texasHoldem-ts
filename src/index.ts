@@ -33,3 +33,23 @@ export {
   getActivePlayer,
   getTableLegalActions,
 } from "./table.js";
+
+export * from "./position.js";
+
+export {
+  type Strategy,
+  type SyncStrategy,
+  type StopCondition,
+  type PlayHandOptions,
+  type PlayHandResult,
+  type PlayGameOptions,
+  type PlayGameResult,
+  fromSync,
+  playOneHand,
+  playHand,
+  playGame,
+  stopAfterHands,
+  stopWhenFewPlayers,
+  alwaysFold,
+  passiveStrategy,
+} from "./loop.js";

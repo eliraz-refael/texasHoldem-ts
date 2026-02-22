@@ -49,7 +49,18 @@ export default tseslint.config(
       "@typescript-eslint/no-empty-object-type": "off",
       // Allow non-null assertions where array bounds are checked manually
       "@typescript-eslint/no-non-null-assertion": "warn",
+      // Ban type assertions (as Type) — use type narrowing instead
+      "@typescript-eslint/consistent-type-assertions": [
+        "error",
+        { assertionStyle: "never" },
+      ],
     },
+  },
+
+  // Disable type-checked rules for test files (not in tsconfig project)
+  {
+    files: ["test/**/*.ts"],
+    ...tseslint.configs.disableTypeChecked,
   },
 
   // Prettier — must be last to disable conflicting formatting rules

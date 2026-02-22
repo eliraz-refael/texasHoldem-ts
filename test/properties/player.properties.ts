@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { Option } from "effect";
-import { Chips, chipsToNumber, ZERO_CHIPS } from "../../src/brand.js";
+import { Chips, chipsToNumber } from "../../src/brand.js";
 import {
   placeBet,
   fold,
@@ -10,7 +10,7 @@ import {
   canAct,
   dealCards,
 } from "../../src/player.js";
-import { arbPlayer, arbChips, arbPositiveChips, arbCard } from "../arbitraries.js";
+import { arbPlayer, arbChips, arbCard } from "../arbitraries.js";
 
 // ---------------------------------------------------------------------------
 // Properties

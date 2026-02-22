@@ -194,7 +194,7 @@ export function applyAction(
   const legal = getLegalActions(state);
   const validated = validateAction(action, legal);
   if (Either.isLeft(validated)) {
-    return validated as Either.Either<never, InvalidAction>;
+    return Either.left(validated.left);
   }
 
   const player = getPlayer(state, seat);

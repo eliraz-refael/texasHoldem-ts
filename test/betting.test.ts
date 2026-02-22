@@ -7,7 +7,7 @@ import {
   applyAction,
   activePlayer,
 } from "../src/betting.js";
-import { Fold, Check, Bet } from "../src/action.js";
+import { Check, Bet } from "../src/action.js";
 
 // Generic chip conservation, fold removal, termination, all-in, and
 // call/raise validation tests are covered by betting.properties.ts.

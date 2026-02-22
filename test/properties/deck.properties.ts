@@ -5,7 +5,6 @@ import { shuffled, draw, dealHoleCards } from "../../src/deck.js";
 import type { Deck } from "../../src/deck.js";
 import { ALL_CARDS, toPokersolverString } from "../../src/card.js";
 import { SeatIndex } from "../../src/brand.js";
-import { arbSeatIndex } from "../arbitraries.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,7 +13,7 @@ import { arbSeatIndex } from "../arbitraries.js";
 /** Serialize a deck (or card array) into a sorted array of pokersolver strings
  *  so we can compare multisets independent of ordering. */
 const toSortedStrings = (cards: readonly { rank: number; suit: string }[]) =>
-  cards.map((c) => toPokersolverString(c as any)).sort();
+  cards.map((c) => toPokersolverString(c)).sort();
 
 const ALL_CARDS_SORTED = toSortedStrings(ALL_CARDS);
 
