@@ -20,7 +20,6 @@ import {
 import { Fold, Call, Check, AllIn } from "../../src/action.js";
 import type { Action } from "../../src/action.js";
 import type { ForcedBets } from "../../src/hand.js";
-import { arbPositiveChips, arbForcedBets } from "../arbitraries.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,18 +56,7 @@ function totalTableChips(table: TableState): number {
   return sum;
 }
 
-function totalHandChips(table: TableState): number {
-  if (Option.isNone(table.currentHand)) return 0;
-  const hs = table.currentHand.value;
-  let sum = 0;
-  for (const p of hs.players) {
-    sum += chipsToNumber(p.chips) + chipsToNumber(p.currentBet);
-  }
-  for (const pot of hs.pots) {
-    sum += chipsToNumber(pot.amount);
-  }
-  return sum;
-}
+
 
 /**
  * Play the active player's turn by choosing from legal actions based on

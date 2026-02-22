@@ -10,7 +10,6 @@ import type { Chips, SeatIndex, HandId } from "./brand.js";
 import {
   ZERO_CHIPS,
   minChips,
-  chipsToNumber,
   SeatIndexOrder,
 } from "./brand.js";
 import type { Card } from "./card.js";

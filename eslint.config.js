@@ -57,6 +57,12 @@ export default tseslint.config(
     },
   },
 
+  // Disable type-checked rules for test files (not in tsconfig project)
+  {
+    files: ["test/**/*.ts"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+
   // Prettier — must be last to disable conflicting formatting rules
   prettierConfig,
 );

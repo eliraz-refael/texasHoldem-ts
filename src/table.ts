@@ -6,7 +6,7 @@
 
 import { Array as A, Effect, Either, HashMap, Option, pipe } from "effect";
 
-import type { Chips, SeatIndex, HandId } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand.js";
 import {
   HandId as makeHandId,
   chipsToNumber,

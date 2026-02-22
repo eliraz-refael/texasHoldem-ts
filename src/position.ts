@@ -8,7 +8,7 @@
 
 import { Option, Schema } from "effect";
 
-import type { Chips, SeatIndex } from "./brand.js";
+import type { SeatIndex } from "./brand.js";
 import {
   Chips as makeChips,
   SeatIndexSchema,
@@ -20,8 +20,7 @@ import { CardSchema } from "./card.js";
 import { LegalActionsSchema } from "./action.js";
 import type { LegalActions } from "./action.js";
 import type { Player } from "./player.js";
-import type { HandState, Phase } from "./hand.js";
-import { activePlayer as handActivePlayer } from "./hand.js";
+import type { HandState } from "./hand.js";
 import { getLegalActions as handGetLegalActions } from "./hand.js";
 import type { GameEvent } from "./event.js";
 import type { TableState } from "./table.js";
@@ -84,11 +83,6 @@ export type StrategyContext = Schema.Schema.Type<typeof StrategyContextSchema>;
 // ---------------------------------------------------------------------------
 // Role derivation
 // ---------------------------------------------------------------------------
-
-const FULL_ROLE_SEQUENCE: readonly PositionalRole[] = [
-  "Button", "SmallBlind", "BigBlind",
-  "UTG", "UTG1", "UTG2", "LJ", "HJ", "CO",
-] as const;
 
 /**
  * Build the role array for a given number of players.

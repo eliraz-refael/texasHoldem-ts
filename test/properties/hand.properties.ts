@@ -7,7 +7,6 @@ import {
   act,
   activePlayer,
   isComplete,
-  currentPhase,
   getLegalActions,
 } from "../../src/hand.js";
 import type { HandState, Phase } from "../../src/hand.js";

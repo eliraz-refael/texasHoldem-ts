@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Effect, Either, HashMap, Option } from "effect";
-import { SeatIndex, Chips, chipsToNumber, seatIndexToNumber } from "../src/brand.js";
-import { Fold, Check, Call, Bet } from "../src/action.js";
+import { SeatIndex, Chips, chipsToNumber } from "../src/brand.js";
+import { Fold, Bet } from "../src/action.js";
 import type { GameEvent } from "../src/event.js";
 import { createTable, sitDown, startNextHand } from "../src/table.js";
 import type { TableState } from "../src/table.js";

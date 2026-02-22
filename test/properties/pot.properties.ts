@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { Chips, SeatIndex, chipsToNumber } from "../../src/brand.js";
 import { collectBets, totalPotSize } from "../../src/pot.js";
-import type { BettingPlayer } from "../../src/pot.js";
 
 // ---------------------------------------------------------------------------
 // Arbitraries

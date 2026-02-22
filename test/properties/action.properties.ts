@@ -13,7 +13,6 @@ import {
   AllIn,
 } from "../../src/action.js";
 import type { Action, LegalActions } from "../../src/action.js";
-import { arbPositiveChips, arbChips } from "../arbitraries.js";
 
 // ---------------------------------------------------------------------------
 // Arbitraries

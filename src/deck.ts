@@ -1,4 +1,4 @@
-import { Array as A, Chunk, Effect, Either, HashMap, Random, pipe } from "effect";
+import { Array as A, Chunk, Effect, Either, HashMap, Random } from "effect";
 import type { Card } from "./card.js";
 import { ALL_CARDS } from "./card.js";
 import type { SeatIndex } from "./brand.js";

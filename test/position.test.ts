@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Arbitrary, FastCheck } from "effect";
 import { Effect, Either, Option } from "effect";
-import { SeatIndex, Chips, HandId, seatIndexToNumber } from "../src/brand.js";
+import { SeatIndex, Chips } from "../src/brand.js";
 import { createPlayer } from "../src/player.js";
 import { createTable, sitDown, startNextHand } from "../src/table.js";
 import type { TableState } from "../src/table.js";
@@ -10,15 +10,12 @@ import {
   getSmallBlindSeat,
   getBigBlindSeat,
   getPlayersToActAfter,
-  getPositionalRole,
   buildStrategyContext,
   toPlayerView,
   PositionalRoleSchema,
   PlayerViewSchema,
   StrategyContextSchema,
 } from "../src/position.js";
-import type { PositionalRole } from "../src/position.js";
-import { startHand } from "../src/hand.js";
 import type { ForcedBets } from "../src/hand.js";
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import {
   getLegalActions,
 } from "../../src/betting.js";
 import type { BettingRoundState } from "../../src/betting.js";
-import { Fold, Check, Call, AllIn, Raise, Bet } from "../../src/action.js";
+import { Fold, Check, Call, AllIn, Raise } from "../../src/action.js";
 import type { Action } from "../../src/action.js";
 import { Either, Option } from "effect";
 import { arbPlayers } from "../arbitraries.js";
