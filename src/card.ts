@@ -94,7 +94,7 @@ const CHAR_TO_RANK: Record<string, Rank> = {
 };
 
 function isSuit(s: string): s is Suit {
-  return (SUITS as readonly string[]).includes(s);
+  return SUITS.some((suit) => suit === s);
 }
 
 /**

@@ -6,22 +6,21 @@
  * @module
  */
 
-import { Duration, Effect, Either, HashMap, Option, Schema, identity } from "effect";
+import { Duration, Effect, Either, HashMap, Option, Schema, pipe, identity } from "effect";
 
 import type { Action } from "./action.js";
 import { Fold, Check, Call } from "./action.js";
 import type { GameEvent } from "./event.js";
 import type { PokerError } from "./error.js";
+import type { SeatIndex } from "./brand.js";
 import type { TableState } from "./table.js";
 import {
   startNextHand,
   act as tableAct,
   getActivePlayer,
-  getTableLegalActions,
 } from "./table.js";
 import type { StrategyContext } from "./position.js";
 import { buildStrategyContext } from "./position.js";
-import { chipsToNumber } from "./brand.js";
 
 // ---------------------------------------------------------------------------
 // Function types — plain TypeScript (Schema can't represent functions)
@@ -74,14 +73,13 @@ export function fromSync(fn: SyncStrategy): Strategy {
   return (ctx) => Effect.succeed(fn(ctx));
 }
 
-function resolveDefault(
-  defaultAction: PlayHandOptions["defaultAction"],
-  ctx: StrategyContext,
-): Action {
-  if (defaultAction === undefined) return Fold;
-  if (typeof defaultAction === "function") return defaultAction(ctx);
-  return defaultAction;
-}
+const resolveDefault =
+  (defaultAction: PlayHandOptions["defaultAction"]) =>
+  (ctx: StrategyContext): Action => {
+    if (defaultAction === undefined) return Fold;
+    if (typeof defaultAction === "function") return defaultAction(ctx);
+    return defaultAction;
+  };
 
 function chooseValidFallback(ctx: StrategyContext): Action {
   if (ctx.legalActions.canCheck) return Check;
@@ -90,174 +88,235 @@ function chooseValidFallback(ctx: StrategyContext): Action {
 }
 
 // ---------------------------------------------------------------------------
+// Loop state records
+// ---------------------------------------------------------------------------
+
+interface LoopState {
+  readonly state: TableState;
+  readonly actionCount: number;
+  readonly tableEventsBaseline: number;
+  readonly lastHandEventCount: number;
+}
+
+interface GameLoopState {
+  readonly state: TableState;
+  readonly handsPlayed: number;
+  readonly completed: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Event tracking
+// ---------------------------------------------------------------------------
+
+function getNewEvents(
+  state: TableState,
+  tableEventsBaseline: number,
+  lastHandEventCount: number,
+): readonly GameEvent[] {
+  if (Option.isSome(state.currentHand)) {
+    return state.currentHand.value.events.slice(lastHandEventCount);
+  }
+  return state.events.slice(tableEventsBaseline);
+}
+
+const updateEventTracking =
+  (onEvent?: (event: GameEvent) => void) =>
+  (
+    newState: TableState,
+    prev: LoopState,
+  ): Pick<LoopState, "tableEventsBaseline" | "lastHandEventCount"> => {
+    if (onEvent) {
+      for (const ev of getNewEvents(newState, prev.tableEventsBaseline, prev.lastHandEventCount)) {
+        onEvent(ev);
+      }
+    }
+    if (Option.isSome(newState.currentHand)) {
+      return {
+        tableEventsBaseline: prev.tableEventsBaseline,
+        lastHandEventCount: newState.currentHand.value.events.length,
+      };
+    }
+    return {
+      tableEventsBaseline: newState.events.length,
+      lastHandEventCount: 0,
+    };
+  };
+
+const fireInitialEvents =
+  (onEvent?: (event: GameEvent) => void) =>
+  (state: TableState): Effect.Effect<void> =>
+    Effect.sync(() => {
+      if (onEvent && Option.isSome(state.currentHand)) {
+        for (const ev of state.currentHand.value.events) {
+          onEvent(ev);
+        }
+      }
+    });
+
+// ---------------------------------------------------------------------------
+// Action application with fallback
+// ---------------------------------------------------------------------------
+
+const tryApplyAction =
+  (state: TableState, seat: SeatIndex) =>
+  (action: Action): Effect.Effect<TableState, PokerError> =>
+    pipe(
+      tableAct(state, seat, action),
+      Either.match({
+        onLeft: (e) => Effect.fail(e),
+        onRight: (s) => Effect.succeed(s),
+      }),
+    );
+
+// ---------------------------------------------------------------------------
+// Strategy decorator
+// ---------------------------------------------------------------------------
+
+const withTimeout =
+  (opts?: PlayHandOptions) =>
+  (strategy: Strategy): Strategy => {
+    if (opts?.actionTimeout === undefined) return strategy;
+    const duration = opts.actionTimeout;
+    const getDefault = resolveDefault(opts.defaultAction);
+    return (ctx) =>
+      Effect.timeoutTo(strategy(ctx), {
+        duration,
+        onTimeout: () => getDefault(ctx),
+        onSuccess: identity,
+      });
+  };
+
+// ---------------------------------------------------------------------------
+// Single action step
+// ---------------------------------------------------------------------------
+
+const stepOneAction =
+  (strategy: Strategy, opts?: PlayHandOptions) => {
+    const getDefault = resolveDefault(opts?.defaultAction);
+    const trackEvents = updateEventTracking(opts?.onEvent);
+    const getAction = withTimeout(opts)(strategy);
+
+    return (ls: LoopState): Effect.Effect<LoopState, PokerError> => {
+      const seatOpt = getActivePlayer(ls.state);
+      if (Option.isNone(seatOpt)) return Effect.die("unreachable: no active player");
+
+      const seat = seatOpt.value;
+      const newEvents = getNewEvents(ls.state, ls.tableEventsBaseline, ls.lastHandEventCount);
+      const ctxOpt = buildStrategyContext(ls.state, seat, newEvents);
+      if (Option.isNone(ctxOpt)) return Effect.die("unreachable: no strategy context");
+
+      const ctx = ctxOpt.value;
+      const tryAction = tryApplyAction(ls.state, seat);
+
+      return pipe(
+        getAction(ctx),
+        Effect.flatMap((action) =>
+          pipe(
+            tryAction(action),
+            Effect.orElse(() => tryAction(getDefault(ctx))),
+            Effect.orElse(() => tryAction(chooseValidFallback(ctx))),
+          ),
+        ),
+        Effect.map((newState) => ({
+          ...trackEvents(newState, ls),
+          state: newState,
+          actionCount: ls.actionCount + 1,
+        })),
+      );
+    };
+  };
+
+// ---------------------------------------------------------------------------
 // playOneHand — drive an already-started hand to completion
 // ---------------------------------------------------------------------------
 
-export function playOneHand(
-  state: TableState,
-  strategy: Strategy,
-  opts?: PlayHandOptions,
-): Effect.Effect<PlayHandResult, PokerError> {
-  const maxActions = opts?.maxActionsPerHand ?? 500;
+export const playOneHand =
+  (strategy: Strategy, opts?: PlayHandOptions) => {
+    const maxActions = opts?.maxActionsPerHand ?? 500;
+    const step = stepOneAction(strategy, opts);
 
-  return Effect.gen(function* () {
-    let current = state;
-    let actionCount = 0;
-    let tableEventsBaseline = current.events.length;
-    let lastHandEventCount = Option.isSome(current.currentHand)
-      ? current.currentHand.value.events.length
-      : 0;
+    return (state: TableState): Effect.Effect<PlayHandResult, PokerError> => {
+      const initial: LoopState = {
+        state,
+        actionCount: 0,
+        tableEventsBaseline: state.events.length,
+        lastHandEventCount: Option.isSome(state.currentHand)
+          ? state.currentHand.value.events.length
+          : 0,
+      };
 
-    while (Option.isSome(getActivePlayer(current))) {
-      if (actionCount >= maxActions) {
-        return { state: current, actionCount, completed: false };
-      }
-
-      const seat = getActivePlayer(current);
-      if (Option.isNone(seat)) break;
-
-      // Compute new events (delta) since last action
-      const newEvents = getNewEvents(current, tableEventsBaseline, lastHandEventCount);
-
-      const ctxOpt = buildStrategyContext(current, seat.value, newEvents);
-      if (Option.isNone(ctxOpt)) break;
-      const ctx = ctxOpt.value;
-
-      // Get action from strategy (with optional timeout)
-      let action: Action;
-      if (opts?.actionTimeout !== undefined) {
-        action = yield* Effect.timeoutTo(strategy(ctx), {
-          duration: opts.actionTimeout,
-          onTimeout: () => resolveDefault(opts?.defaultAction, ctx),
-          onSuccess: identity,
-        });
-      } else {
-        action = yield* strategy(ctx);
-      }
-
-      // Try applying the action
-      const result = tableAct(current, seat.value, action);
-      if (Either.isRight(result)) {
-        current = result.right;
-        actionCount++;
-        // Fire onEvent for new events
-        if (opts?.onEvent) {
-          fireNewEvents(current, tableEventsBaseline, lastHandEventCount, opts.onEvent);
-        }
-        // Update event tracking
-        if (Option.isSome(current.currentHand)) {
-          lastHandEventCount = current.currentHand.value.events.length;
-        } else {
-          // Hand completed — events moved to table
-          lastHandEventCount = 0;
-          tableEventsBaseline = current.events.length;
-        }
-        continue;
-      }
-
-      // Invalid action — try defaultAction
-      const fallbackAction = resolveDefault(opts?.defaultAction, ctx);
-      const fallbackResult = tableAct(current, seat.value, fallbackAction);
-      if (Either.isRight(fallbackResult)) {
-        current = fallbackResult.right;
-        actionCount++;
-        if (opts?.onEvent) {
-          fireNewEvents(current, tableEventsBaseline, lastHandEventCount, opts.onEvent);
-        }
-        if (Option.isSome(current.currentHand)) {
-          lastHandEventCount = current.currentHand.value.events.length;
-        } else {
-          lastHandEventCount = 0;
-          tableEventsBaseline = current.events.length;
-        }
-        continue;
-      }
-
-      // defaultAction also invalid — try a valid fallback
-      const validFallback = chooseValidFallback(ctx);
-      const validResult = tableAct(current, seat.value, validFallback);
-      if (Either.isRight(validResult)) {
-        current = validResult.right;
-        actionCount++;
-        if (opts?.onEvent) {
-          fireNewEvents(current, tableEventsBaseline, lastHandEventCount, opts.onEvent);
-        }
-        if (Option.isSome(current.currentHand)) {
-          lastHandEventCount = current.currentHand.value.events.length;
-        } else {
-          lastHandEventCount = 0;
-          tableEventsBaseline = current.events.length;
-        }
-        continue;
-      }
-
-      // All fallbacks failed
-      return yield* Effect.fail(validResult.left);
-    }
-
-    const completed = Option.isNone(current.currentHand) || Option.isNone(getActivePlayer(current));
-    return { state: current, actionCount, completed };
-  });
-}
+      return pipe(
+        Effect.iterate(initial, {
+          while: (ls) => ls.actionCount < maxActions && Option.isSome(getActivePlayer(ls.state)),
+          body: step,
+        }),
+        Effect.map((ls): PlayHandResult => ({
+          state: ls.state,
+          actionCount: ls.actionCount,
+          completed: Option.isNone(ls.state.currentHand) || Option.isNone(getActivePlayer(ls.state)),
+        })),
+      );
+    };
+  };
 
 // ---------------------------------------------------------------------------
 // playHand — startNextHand + playOneHand
 // ---------------------------------------------------------------------------
 
-export function playHand(
-  table: TableState,
-  strategy: Strategy,
-  opts?: PlayHandOptions,
-): Effect.Effect<PlayHandResult, PokerError> {
-  return Effect.flatMap(
-    startNextHand(table),
-    (started) => {
-      // Fire onEvent for the initial hand events (HandStarted, BlindsPosted, etc.)
-      if (opts?.onEvent && Option.isSome(started.currentHand)) {
-        for (const ev of started.currentHand.value.events) {
-          opts.onEvent(ev);
-        }
-      }
-      return playOneHand(started, strategy, opts);
-    },
-  );
-}
+export const playHand =
+  (strategy: Strategy, opts?: PlayHandOptions) => {
+    const fireEvents = fireInitialEvents(opts?.onEvent);
+    const runHand = playOneHand(strategy, opts);
+
+    return (table: TableState): Effect.Effect<PlayHandResult, PokerError> =>
+      pipe(
+        startNextHand(table),
+        Effect.tap(fireEvents),
+        Effect.flatMap(runHand),
+      );
+  };
 
 // ---------------------------------------------------------------------------
 // playGame — multi-hand loop
 // ---------------------------------------------------------------------------
 
-export function playGame(
-  table: TableState,
-  strategy: Strategy,
-  opts?: PlayGameOptions,
-): Effect.Effect<PlayGameResult, PokerError> {
-  const maxHands = opts?.maxHands ?? 10_000;
-  const stopWhen = opts?.stopWhen;
+export const playGame =
+  (strategy: Strategy, opts?: PlayGameOptions) => {
+    const maxHands = opts?.maxHands ?? 10_000;
+    const stopWhen = opts?.stopWhen;
+    const runHand = playHand(strategy, opts);
 
-  return Effect.gen(function* () {
-    let current = table;
-    let handsPlayed = 0;
+    return (table: TableState): Effect.Effect<PlayGameResult, PokerError> => {
+      const initial: GameLoopState = {
+        state: table,
+        handsPlayed: 0,
+        completed: true,
+      };
 
-    while (handsPlayed < maxHands) {
-      if (stopWhen && stopWhen(current, handsPlayed)) {
-        break;
-      }
-
-      // Check if enough players
-      const playerCount = HashMap.size(current.seats);
-      if (playerCount < 2) break;
-
-      const result = yield* playHand(current, strategy, opts);
-      current = result.state;
-      handsPlayed++;
-
-      if (!result.completed) break;
-    }
-
-    return { state: current, handsPlayed };
-  });
-}
+      return pipe(
+        Effect.iterate(initial, {
+          while: (gs) =>
+            gs.completed
+            && gs.handsPlayed < maxHands
+            && HashMap.size(gs.state.seats) >= 2
+            && !(stopWhen?.(gs.state, gs.handsPlayed)),
+          body: (gs) =>
+            pipe(
+              runHand(gs.state),
+              Effect.map((result): GameLoopState => ({
+                state: result.state,
+                handsPlayed: gs.handsPlayed + 1,
+                completed: result.completed,
+              })),
+            ),
+        }),
+        Effect.map((gs): PlayGameResult => ({
+          state: gs.state,
+          handsPlayed: gs.handsPlayed,
+        })),
+      );
+    };
+  };
 
 // ---------------------------------------------------------------------------
 // Stop conditions
@@ -283,31 +342,3 @@ export const passiveStrategy: Strategy = fromSync((ctx) => {
   if (Option.isSome(ctx.legalActions.callAmount)) return Call;
   return Fold;
 });
-
-// ---------------------------------------------------------------------------
-// Event tracking helpers
-// ---------------------------------------------------------------------------
-
-function getNewEvents(
-  state: TableState,
-  tableEventsBaseline: number,
-  lastHandEventCount: number,
-): readonly GameEvent[] {
-  if (Option.isSome(state.currentHand)) {
-    const handEvents = state.currentHand.value.events;
-    return handEvents.slice(lastHandEventCount);
-  }
-  return state.events.slice(tableEventsBaseline);
-}
-
-function fireNewEvents(
-  state: TableState,
-  tableEventsBaseline: number,
-  lastHandEventCount: number,
-  onEvent: (event: GameEvent) => void,
-): void {
-  const events = getNewEvents(state, tableEventsBaseline, lastHandEventCount);
-  for (const ev of events) {
-    onEvent(ev);
-  }
-}

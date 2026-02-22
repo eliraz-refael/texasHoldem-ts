@@ -51,18 +51,18 @@ export const ZERO_CHIPS: Chips = Chips(0);
 
 /** Add two Chips values. */
 export const addChips = (a: Chips, b: Chips): Chips =>
-  Chips((a as number) + (b as number));
+  Chips(a + b);
 
 /** Subtract `b` from `a`. Caller must ensure `a >= b`. */
 export const subtractChips = (a: Chips, b: Chips): Chips =>
-  Chips((a as number) - (b as number));
+  Chips(a - b);
 
 /** Return the smaller of two Chips values. */
 export const minChips = (a: Chips, b: Chips): Chips =>
-  (a as number) <= (b as number) ? a : b;
+  a <= b ? a : b;
 
 /** Unwrap a Chips value to a plain number. */
-export const chipsToNumber = (c: Chips): number => c as number;
+export const chipsToNumber = (c: Chips): number => c;
 
 /** Order instance for Chips (ascending by numeric value). */
 export const ChipsOrder: Order.Order<Chips> = Order.mapInput(
@@ -106,7 +106,7 @@ export const SeatIndexSchema = Schema.Number.pipe(
 );
 
 /** Unwrap a SeatIndex value to a plain number. */
-export const seatIndexToNumber = (s: SeatIndex): number => s as number;
+export const seatIndexToNumber = (s: SeatIndex): number => s;
 
 /** Order instance for SeatIndex (ascending by numeric value). */
 export const SeatIndexOrder: Order.Order<SeatIndex> = Order.mapInput(

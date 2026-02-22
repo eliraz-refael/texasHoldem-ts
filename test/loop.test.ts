@@ -49,7 +49,7 @@ function totalChips(state: TableState): number {
 describe("playHand", () => {
   it("completes a hand with alwaysFold", () => {
     const table = makeTable(4);
-    const result = Effect.runSync(playHand(table, alwaysFold));
+    const result = Effect.runSync(playHand(alwaysFold)(table));
 
     expect(result.completed).toBe(true);
     expect(result.actionCount).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ describe("playHand", () => {
   it("reaches showdown with passiveStrategy and chips are conserved", () => {
     const table = makeTable(4);
     const initialChips = totalChips(table);
-    const result = Effect.runSync(playHand(table, passiveStrategy));
+    const result = Effect.runSync(playHand(passiveStrategy)(table));
 
     expect(result.completed).toBe(true);
     expect(totalChips(result.state)).toBe(initialChips);
@@ -69,7 +69,7 @@ describe("playHand", () => {
   it("limits actions with maxActionsPerHand", () => {
     const table = makeTable(4);
     const result = Effect.runSync(
-      playHand(table, passiveStrategy, { maxActionsPerHand: 1 }),
+      playHand(passiveStrategy, { maxActionsPerHand: 1 })(table),
     );
 
     expect(result.completed).toBe(false);
@@ -85,7 +85,7 @@ describe("playOneHand", () => {
   it("works with an already-started hand", () => {
     const table = makeTable(4);
     const started = Effect.runSync(startNextHand(table));
-    const result = Effect.runSync(playOneHand(started, alwaysFold));
+    const result = Effect.runSync(playOneHand(alwaysFold)(started));
 
     expect(result.completed).toBe(true);
     expect(result.actionCount).toBeGreaterThan(0);
@@ -102,9 +102,9 @@ describe("onEvent", () => {
     const events: GameEvent[] = [];
 
     Effect.runSync(
-      playHand(table, alwaysFold, {
+      playHand(alwaysFold, {
         onEvent: (ev) => events.push(ev),
-      }),
+      })(table),
     );
 
     expect(events.length).toBeGreaterThan(0);
@@ -125,10 +125,10 @@ describe("StrategyContext", () => {
     const contexts: StrategyContext[] = [];
 
     Effect.runSync(
-      playHand(table, fromSync((ctx) => {
+      playHand(fromSync((ctx) => {
         contexts.push(ctx);
         return Fold;
-      })),
+      }))(table),
     );
 
     expect(contexts.length).toBeGreaterThan(0);
@@ -145,10 +145,10 @@ describe("StrategyContext", () => {
     const eventCounts: number[] = [];
 
     Effect.runSync(
-      playHand(table, fromSync((ctx) => {
+      playHand(fromSync((ctx) => {
         eventCounts.push(ctx.newEvents.length);
         return Fold;
-      })),
+      }))(table),
     );
 
     // The first action should have newEvents from the hand start (blinds, etc.)
@@ -165,7 +165,7 @@ describe("playGame", () => {
   it("plays exactly N hands with stopAfterHands", () => {
     const table = makeTable(4);
     const result = Effect.runSync(
-      playGame(table, passiveStrategy, { stopWhen: stopAfterHands(5) }),
+      playGame(passiveStrategy, { stopWhen: stopAfterHands(5) })(table),
     );
 
     expect(result.handsPlayed).toBe(5);
@@ -175,7 +175,7 @@ describe("playGame", () => {
     // Give players very few chips so they bust quickly
     const table = makeTable(4, 15);
     const result = Effect.runSync(
-      playGame(table, alwaysFold, { maxHands: 100 }),
+      playGame(alwaysFold, { maxHands: 100 })(table),
     );
 
     // Should stop because players bust out
@@ -189,7 +189,7 @@ describe("playGame", () => {
     const initialChips = totalChips(table);
 
     const result = Effect.runSync(
-      playGame(table, passiveStrategy, { stopWhen: stopAfterHands(10) }),
+      playGame(passiveStrategy, { stopWhen: stopAfterHands(10) })(table),
     );
 
     expect(totalChips(result.state)).toBe(initialChips);
@@ -207,7 +207,7 @@ describe("invalid action fallback", () => {
     const badStrategy = fromSync(() => Bet({ amount: Chips(1) }));
 
     const result = Effect.runSync(
-      playHand(table, badStrategy, { defaultAction: Fold }),
+      playHand(badStrategy, { defaultAction: Fold })(table),
     );
 
     expect(result.completed).toBe(true);
@@ -225,10 +225,10 @@ describe("timeout", () => {
     const hangingStrategy = () => Effect.never;
 
     const result = await Effect.runPromise(
-      playHand(table, hangingStrategy, {
+      playHand(hangingStrategy, {
         actionTimeout: "10 millis",
         defaultAction: Fold,
-      }),
+      })(table),
     );
 
     expect(result.completed).toBe(true);

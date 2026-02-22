@@ -65,9 +65,8 @@ describe("dealFlop — burn and ordering", () => {
 
   it("returns Either.left when deck has fewer than 4 cards", () => {
     const deck = Effect.runSync(shuffled);
-    const r1 = draw(deck, 49);
-    expect(Either.isRight(r1)).toBe(true);
-    const small = (r1 as Extract<typeof r1, { _tag: "Right" }>).right[1];
+    const r1 = Either.getOrThrow(draw(deck, 49));
+    const small = r1[1];
     expect(small).toHaveLength(3);
     const result = dealFlop(small);
     expect(Either.isLeft(result)).toBe(true);
@@ -89,9 +88,8 @@ describe("dealOne — burn and ordering", () => {
 
   it("returns Either.left when deck has fewer than 2 cards", () => {
     const deck = Effect.runSync(shuffled);
-    const r1 = draw(deck, 51);
-    expect(Either.isRight(r1)).toBe(true);
-    const small = (r1 as Extract<typeof r1, { _tag: "Right" }>).right[1];
+    const r1 = Either.getOrThrow(draw(deck, 51));
+    const small = r1[1];
     expect(small).toHaveLength(1);
     const result = dealOne(small);
     expect(Either.isLeft(result)).toBe(true);

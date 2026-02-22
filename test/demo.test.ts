@@ -163,14 +163,13 @@ describe("Texas Hold'em Demo - 10 Rounds (game loop API)", () => {
 
     const result = Effect.runSync(
       playGame(
-        state,
         fromSync(chooseAction),
         {
           stopWhen: stopAfterHands(10),
           onEvent: logEvent,
           defaultAction: Fold,
         },
-      ),
+      )(state),
     );
 
     state = result.state;
