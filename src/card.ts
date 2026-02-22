@@ -93,7 +93,9 @@ const CHAR_TO_RANK: Record<string, Rank> = {
   A: 14,
 };
 
-const VALID_SUITS = new Set<string>(SUITS);
+function isSuit(s: string): s is Suit {
+  return (SUITS as readonly string[]).includes(s);
+}
 
 /**
  * Convert a Card to its two-character pokersolver string.
@@ -139,7 +141,7 @@ export const cardFromString = (s: string): Either.Either<Card, InvalidCard> => {
     );
   }
 
-  if (!VALID_SUITS.has(suitChar)) {
+  if (!isSuit(suitChar)) {
     return Either.left(
       new InvalidCard({
         input: s,
@@ -148,7 +150,7 @@ export const cardFromString = (s: string): Either.Either<Card, InvalidCard> => {
     );
   }
 
-  return Either.right(card(rank, suitChar as Suit));
+  return Either.right(card(rank, suitChar));
 };
 
 /**

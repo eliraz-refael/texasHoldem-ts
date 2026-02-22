@@ -234,7 +234,7 @@ export function startHand(
     const bbAmount = minChips(forcedBets.bigBlind, bbPlayer.chips);
     currentPlayers = updatePlayer(currentPlayers, bbSeat, (p) => placeBet(p, bbAmount));
 
-    events.push(HandStarted({ handId, button, players: seatOrder }));
+    events.push(HandStarted({ handId, button, smallBlind: sbSeat, bigBlind: bbSeat, players: seatOrder }));
     events.push(
       BlindsPosted({
         smallBlind: { seat: sbSeat, amount: sbAmount },
