@@ -28,6 +28,58 @@ pnpm add texasholdem
 
 ## Quick Start
 
+### Strategy-based game loop (recommended)
+
+The simplest way to run poker hands — define a strategy function and let the engine drive the loop:
+
+```typescript
+import { Effect, Either } from "effect";
+import {
+  Chips,
+  SeatIndex,
+  createTable,
+  sitDown,
+  playGame,
+  fromSync,
+  stopAfterHands,
+  Check,
+  Call,
+  Fold,
+} from "texasholdem";
+
+// 1. Create a table and seat players
+let table = Either.getOrThrow(
+  createTable({
+    maxSeats: 6,
+    forcedBets: { smallBlind: Chips(5), bigBlind: Chips(10) },
+  })
+);
+for (const i of [0, 1, 2, 3]) {
+  table = Either.getOrThrow(sitDown(table, SeatIndex(i), Chips(1000)));
+}
+
+// 2. Define a strategy — receives full positional context
+const myStrategy = fromSync((ctx) => {
+  if (ctx.legalActions.canCheck) return Check;
+  return Call;
+});
+
+// 3. Run 100 hands
+const result = Effect.runSync(
+  playGame(myStrategy, {
+    stopWhen: stopAfterHands(100),
+    onEvent: (ev) => console.log(ev._tag),
+    defaultAction: Fold,
+  })(table)
+);
+
+console.log(`Played ${result.handsPlayed} hands`);
+```
+
+### Manual loop (full control)
+
+For UI-driven games, bots with external I/O, or when you need to control each action individually:
+
 ```typescript
 import { Effect, Either, Option } from "effect";
 import {
@@ -39,9 +91,8 @@ import {
   tableAct,
   getActivePlayer,
   getTableLegalActions,
-  Call,
-  Fold,
   Check,
+  Call,
 } from "texasholdem";
 
 // 1. Create a table
@@ -77,7 +128,7 @@ console.log(`Hand finished. Events: ${state.events.length}`);
 
 ## Architecture
 
-12 modules in strict bottom-up dependency order:
+14 modules in strict bottom-up dependency order:
 
 ```
 brand.ts ─── card.ts ─── deck.ts ───────────────────┐
@@ -93,8 +144,12 @@ brand.ts ─── card.ts ─── deck.ts ───────────�
    │                   hand.ts ────────────────────────┘
    │                        │
    └─────────────────  table.ts
-                            │
-                        index.ts (barrel exports)
+                         │    │
+                  position.ts  │
+                         │     │
+                       loop.ts
+                         │
+                     index.ts (barrel exports)
 ```
 
 ### Module Summary
@@ -113,8 +168,98 @@ brand.ts ─── card.ts ─── deck.ts ───────────�
 | `betting` | Betting round state machine: turn order, completion detection, action validation |
 | `hand` | Full hand lifecycle: Preflop → Flop → Turn → River → Showdown → Complete |
 | `table` | Multi-hand session: seating, button movement, busted player removal |
+| `position` | Positional roles (`Button`, `UTG`, `CO`, …) and `StrategyContext` builder |
+| `loop` | Strategy-driven game loop: `playHand`, `playGame`, timeout/fallback handling |
 
 ## API Overview
+
+### Game Loop (strategy-driven)
+
+The highest-level API — define a strategy function and the engine handles dealing, betting rounds, phase advancement, and multi-hand sessions automatically.
+
+```typescript
+// Strategy receives full context, returns an action
+type Strategy = (ctx: StrategyContext) => Effect.Effect<Action>
+type SyncStrategy = (ctx: StrategyContext) => Action
+
+// Wrap a synchronous function as a Strategy
+fromSync(fn: SyncStrategy): Strategy
+
+// Drive a single hand (table must already have a hand started)
+playOneHand(strategy, opts?): (state: TableState) => Effect<PlayHandResult, PokerError>
+
+// Start + drive a single hand
+playHand(strategy, opts?): (state: TableState) => Effect<PlayHandResult, PokerError>
+
+// Multi-hand loop — keeps dealing until a stop condition is met
+playGame(strategy, opts?): (state: TableState) => Effect<PlayGameResult, PokerError>
+```
+
+**Options:**
+
+```typescript
+interface PlayHandOptions {
+  actionTimeout?: Duration.DurationInput  // e.g. "5 seconds"
+  defaultAction?: Action | ((ctx: StrategyContext) => Action)
+  onEvent?: (event: GameEvent) => void
+  maxActionsPerHand?: number              // default 500 (safety circuit breaker)
+}
+
+interface PlayGameOptions extends PlayHandOptions {
+  stopWhen?: StopCondition
+  maxHands?: number  // default 10_000
+}
+```
+
+**Built-in stop conditions:**
+
+```typescript
+stopAfterHands(n: number): StopCondition
+stopWhenFewPlayers(min?: number): StopCondition  // default min = 2
+```
+
+**Built-in strategies:**
+
+```typescript
+alwaysFold: Strategy      // folds every hand
+passiveStrategy: Strategy // checks when possible, calls otherwise
+```
+
+**Resilience:** when a strategy returns an invalid action, the engine applies a three-level fallback: (1) the returned action, (2) `defaultAction` if provided, (3) Check > Call > Fold. Strategies never need to be defensive about illegal moves.
+
+### Strategy Context
+
+Every strategy call receives a `StrategyContext` — everything a decision-maker needs:
+
+```typescript
+interface StrategyContext {
+  // Identity
+  seat: SeatIndex
+  chips: Chips
+  holeCards: Option<readonly [Card, Card]>
+
+  // Position
+  role: PositionalRole      // "Button" | "SmallBlind" | "BigBlind" | "UTG" | "UTG1" | "UTG2" | "LJ" | "HJ" | "CO"
+  buttonSeat: SeatIndex
+  smallBlindSeat: SeatIndex
+  bigBlindSeat: SeatIndex
+  playersToActAfter: number
+
+  // Hand state
+  phase: Phase              // "Preflop" | "Flop" | "Turn" | "River" | "Showdown" | "Complete"
+  communityCards: Card[]
+  potTotal: Chips
+  bigBlind: Chips
+  activeSeatCount: number   // non-folded, non-busted players
+
+  // Action
+  legalActions: LegalActions
+  players: PlayerView[]     // all players visible state
+  newEvents: GameEvent[]    // events since your last action
+}
+```
+
+Positional roles are assigned automatically based on player count (2–10), following standard poker conventions (heads-up: Button = SB).
 
 ### Table-Level (multi-hand sessions)
 
@@ -129,6 +274,8 @@ getTableLegalActions(state): Option<LegalActions>
 ```
 
 ### Hand-Level (single hand)
+
+Lower-level API for controlling a single hand directly. Most users should prefer the Table or Game Loop API.
 
 ```typescript
 startHand(players, button, forcedBets, handId): Effect<HandState, PokerError>
@@ -151,6 +298,39 @@ Raise({ amount }) // Raise over current bet (branded Chips)
 AllIn              // Put all remaining chips in
 ```
 
+### LegalActions
+
+Tells a strategy what moves are currently valid:
+
+```typescript
+interface LegalActions {
+  canFold: boolean
+  canCheck: boolean
+  callAmount: Option<Chips>   // None = no bet to match
+  minBet: Option<Chips>       // available when no prior bet (opening aggression)
+  maxBet: Option<Chips>
+  minRaise: Option<Chips>     // available when a bet already exists
+  maxRaise: Option<Chips>
+  canAllIn: boolean
+  allInAmount: Chips
+}
+```
+
+### Events
+
+Every state change is recorded as a `GameEvent` — a full hand history / audit log:
+
+```typescript
+type GameEvent =
+  | HandStarted | BlindsPosted | HoleCardsDealt
+  | PlayerActed | BettingRoundEnded
+  | CommunityCardsDealt | ShowdownStarted
+  | PotAwarded | HandEnded
+  | PlayerSatDown | PlayerStoodUp
+```
+
+Use `state.events` for table-level events, or the `onEvent` callback in the game loop for real-time streaming.
+
 ## Effect-TS Usage
 
 | Where | What | Why |
@@ -158,6 +338,7 @@ AllIn              // Put all remaining chips in
 | `deck.ts` shuffle | `Effect<Deck>` | Randomness is a side effect |
 | `hand.ts` startHand | `Effect<HandState, PokerError>` | Calls shuffle |
 | `table.ts` startNextHand | `Effect<TableState, PokerError>` | Calls startHand |
+| `loop.ts` playHand / playGame | `Effect<Result, PokerError>` | Orchestrates effectful hand starts + strategy calls |
 | Everything else | Pure functions / `Either` | No side effects needed |
 | Branded types | `Brand.refined` | Compile-time + runtime safety |
 | Errors | `Data.TaggedError` | Pattern-matchable typed errors |
