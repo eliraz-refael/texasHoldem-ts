@@ -1,8 +1,8 @@
 import { Array as A, Chunk, Effect, Either, HashMap, Random } from "effect";
-import type { Card } from "./card.js";
-import { ALL_CARDS } from "./card.js";
-import type { SeatIndex } from "./brand.js";
-import { DeckExhausted } from "./error.js";
+import type { Card } from "./card";
+import { ALL_CARDS } from "./card";
+import type { SeatIndex } from "./brand";
+import { DeckExhausted } from "./error";
 
 // ---------------------------------------------------------------------------
 // Deck type

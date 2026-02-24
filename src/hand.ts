@@ -6,21 +6,21 @@
 
 import { Array as A, Effect, Either, HashMap, Option, pipe } from "effect";
 
-import type { Chips, SeatIndex, HandId } from "./brand.js";
+import type { Chips, SeatIndex, HandId } from "./brand";
 import {
   ZERO_CHIPS,
   minChips,
   SeatIndexOrder,
-} from "./brand.js";
-import type { Card } from "./card.js";
-import type { Deck } from "./deck.js";
-import { shuffled, dealHoleCards, dealFlop, dealOne } from "./deck.js";
-import type { HandRank } from "./evaluator.js";
-import { evaluateHoldem } from "./evaluator.js";
-import type { Player } from "./player.js";
-import { placeBet, winChips, collectBet, dealCards, canAct } from "./player.js";
-import type { Action, LegalActions } from "./action.js";
-import type { GameEvent } from "./event.js";
+} from "./brand";
+import type { Card } from "./card";
+import type { Deck } from "./deck";
+import { shuffled, dealHoleCards, dealFlop, dealOne } from "./deck";
+import type { HandRank } from "./evaluator";
+import { evaluateHoldem } from "./evaluator";
+import type { Player } from "./player";
+import { placeBet, winChips, collectBet, dealCards, canAct } from "./player";
+import type { Action, LegalActions } from "./action";
+import type { GameEvent } from "./event";
 import {
   HandStarted,
   BlindsPosted,
@@ -30,18 +30,18 @@ import {
   ShowdownStarted,
   PotAwarded,
   HandEnded,
-} from "./event.js";
-import type { PokerError } from "./error.js";
-import { InvalidGameState } from "./error.js";
-import type { Pot } from "./pot.js";
-import { collectBets, awardPots } from "./pot.js";
-import type { BettingRoundState } from "./betting.js";
+} from "./event";
+import type { PokerError } from "./error";
+import { InvalidGameState } from "./error";
+import type { Pot } from "./pot";
+import { collectBets, awardPots } from "./pot";
+import type { BettingRoundState } from "./betting";
 import {
   createBettingRound,
   applyAction as bettingApplyAction,
   getLegalActions as bettingGetLegalActions,
   activePlayer as bettingActivePlayer,
-} from "./betting.js";
+} from "./betting";
 
 // ---------------------------------------------------------------------------
 // ForcedBets

@@ -8,22 +8,22 @@
 
 import { Option, Schema } from "effect";
 
-import type { SeatIndex } from "./brand.js";
+import type { SeatIndex } from "./brand";
 import {
   Chips as makeChips,
   SeatIndexSchema,
   ChipsSchema,
   chipsToNumber,
   ZERO_CHIPS,
-} from "./brand.js";
-import { CardSchema } from "./card.js";
-import { LegalActionsSchema } from "./action.js";
-import type { LegalActions } from "./action.js";
-import type { Player } from "./player.js";
-import type { HandState } from "./hand.js";
-import { getLegalActions as handGetLegalActions } from "./hand.js";
-import type { GameEvent } from "./event.js";
-import type { TableState } from "./table.js";
+} from "./brand";
+import { CardSchema } from "./card";
+import { LegalActionsSchema } from "./action";
+import type { LegalActions } from "./action";
+import type { Player } from "./player";
+import type { HandState } from "./hand";
+import { getLegalActions as handGetLegalActions } from "./hand";
+import type { GameEvent } from "./event";
+import type { TableState } from "./table";
 
 // ---------------------------------------------------------------------------
 // PositionalRole

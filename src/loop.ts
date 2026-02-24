@@ -8,19 +8,19 @@
 
 import { Duration, Effect, Either, HashMap, Option, Schema, pipe, identity } from "effect";
 
-import type { Action } from "./action.js";
-import { Fold, Check, Call } from "./action.js";
-import type { GameEvent } from "./event.js";
-import type { PokerError } from "./error.js";
-import type { SeatIndex } from "./brand.js";
-import type { TableState } from "./table.js";
+import type { Action } from "./action";
+import { Fold, Check, Call } from "./action";
+import type { GameEvent } from "./event";
+import type { PokerError } from "./error";
+import type { SeatIndex } from "./brand";
+import type { TableState } from "./table";
 import {
   startNextHand,
   act as tableAct,
   getActivePlayer,
-} from "./table.js";
-import type { StrategyContext } from "./position.js";
-import { buildStrategyContext } from "./position.js";
+} from "./table";
+import type { StrategyContext } from "./position";
+import { buildStrategyContext } from "./position";
 
 // ---------------------------------------------------------------------------
 // Function types — plain TypeScript (Schema can't represent functions)

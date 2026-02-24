@@ -12,7 +12,7 @@
 
 import { Data } from "effect";
 
-import type { Chips, SeatIndex } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand";
 
 // ---------------------------------------------------------------------------
 // Action / turn errors

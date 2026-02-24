@@ -5,9 +5,9 @@
  */
 
 import { Data, Either, Match, Option, Schema, pipe } from "effect";
-import type { Chips } from "./brand.js";
-import { Chips as makeChips, chipsToNumber, ChipsSchema } from "./brand.js";
-import { InvalidAction } from "./error.js";
+import type { Chips } from "./brand";
+import { Chips as makeChips, chipsToNumber, ChipsSchema } from "./brand";
+import { InvalidAction } from "./error";
 
 // ---------------------------------------------------------------------------
 // Action — Data.TaggedEnum (type-level) + Data.tagged (constructors)

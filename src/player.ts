@@ -1,12 +1,12 @@
 import { Option } from "effect";
-import type { Chips, SeatIndex } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand";
 import {
   ZERO_CHIPS,
   addChips,
   subtractChips,
   chipsToNumber,
-} from "./brand.js";
-import type { Card } from "./card.js";
+} from "./brand";
+import type { Card } from "./card";
 
 // ---------------------------------------------------------------------------
 // Player interface — immutable snapshot of a player's state within a hand
