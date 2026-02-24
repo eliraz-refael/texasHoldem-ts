@@ -1,8 +1,9 @@
 import { Array as A, Either, Order, pipe } from "effect";
-import { Hand as PokersolverHand } from "pokersolver";
-import type { Card } from "./card.js";
-import { toPokersolverString } from "./card.js";
-import { InvalidGameState } from "./error.js";
+import pokersolver from "pokersolver";
+const { Hand: PokersolverHand } = pokersolver;
+import type { Card } from "./card";
+import { toPokersolverString } from "./card";
+import { InvalidGameState } from "./error";
 
 // ---------------------------------------------------------------------------
 // HandRank — our public type that does NOT leak pokersolver internals

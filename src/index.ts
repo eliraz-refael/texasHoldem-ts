@@ -1,12 +1,12 @@
-export * from "./brand.js";
-export * from "./card.js";
-export * from "./deck.js";
-export * from "./evaluator.js";
-export * from "./player.js";
-export * from "./action.js";
-export * from "./event.js";
-export * from "./error.js";
-export * from "./pot.js";
+export * from "./brand";
+export * from "./card";
+export * from "./deck";
+export * from "./evaluator";
+export * from "./player";
+export * from "./action";
+export * from "./event";
+export * from "./error";
+export * from "./pot";
 
 // Re-export betting with namespace prefix to avoid conflicts with hand/table
 export {
@@ -17,9 +17,9 @@ export {
   activePlayer as bettingActivePlayer,
   getPlayer as bettingGetPlayer,
   updatePlayer as bettingUpdatePlayer,
-} from "./betting.js";
+} from "./betting";
 
-export * from "./hand.js";
+export * from "./hand";
 
 // Re-export table with explicit names to avoid conflicts with hand module
 export {
@@ -32,9 +32,9 @@ export {
   act as tableAct,
   getActivePlayer,
   getTableLegalActions,
-} from "./table.js";
+} from "./table";
 
-export * from "./position.js";
+export * from "./position";
 
 export {
   type Strategy,
@@ -52,4 +52,4 @@ export {
   stopWhenFewPlayers,
   alwaysFold,
   passiveStrategy,
-} from "./loop.js";
+} from "./loop";

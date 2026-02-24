@@ -9,9 +9,9 @@
  */
 
 import { Data } from "effect";
-import type { Chips, SeatIndex, HandId } from "./brand.js";
-import type { Card } from "./card.js";
-import type { Action } from "./action.js";
+import type { Chips, SeatIndex, HandId } from "./brand";
+import type { Card } from "./card";
+import type { Action } from "./action";
 
 // ---------------------------------------------------------------------------
 // GameEvent — Data.TaggedEnum (type-level) + Data.tagged (constructors)

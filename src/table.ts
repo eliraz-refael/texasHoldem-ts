@@ -6,18 +6,18 @@
 
 import { Array as A, Effect, Either, HashMap, Option, pipe } from "effect";
 
-import type { Chips, SeatIndex } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand";
 import {
   HandId as makeHandId,
   chipsToNumber,
   seatIndexToNumber,
   SeatIndexOrder,
-} from "./brand.js";
-import type { Player } from "./player.js";
-import { createPlayer, clearHand } from "./player.js";
-import type { Action, LegalActions } from "./action.js";
-import type { GameEvent } from "./event.js";
-import { PlayerSatDown, PlayerStoodUp } from "./event.js";
+} from "./brand";
+import type { Player } from "./player";
+import { createPlayer, clearHand } from "./player";
+import type { Action, LegalActions } from "./action";
+import type { GameEvent } from "./event";
+import { PlayerSatDown, PlayerStoodUp } from "./event";
 import {
   SeatOccupied,
   SeatEmpty,
@@ -26,10 +26,10 @@ import {
   HandInProgress,
   NoHandInProgress,
   InvalidConfig,
-} from "./error.js";
-import type { PokerError } from "./error.js";
-import type { ForcedBets, HandState } from "./hand.js";
-import * as hand from "./hand.js";
+} from "./error";
+import type { PokerError } from "./error";
+import type { ForcedBets, HandState } from "./hand";
+import * as hand from "./hand";
 
 // ---------------------------------------------------------------------------
 // TableConfig

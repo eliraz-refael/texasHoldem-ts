@@ -5,15 +5,15 @@
  */
 
 import { Array as A, pipe } from "effect";
-import type { Chips, SeatIndex } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand";
 import {
   Chips as makeChips,
   ZERO_CHIPS,
   addChips,
   chipsToNumber,
   SeatIndexOrder,
-} from "./brand.js";
-import type { HandRank } from "./evaluator.js";
+} from "./brand";
+import type { HandRank } from "./evaluator";
 
 // ---------------------------------------------------------------------------
 // Pot type

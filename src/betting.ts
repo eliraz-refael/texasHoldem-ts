@@ -1,6 +1,6 @@
 import { Array as A, Either, HashSet, Match, Option, pipe } from "effect";
 
-import type { Chips, SeatIndex } from "./brand.js";
+import type { Chips, SeatIndex } from "./brand";
 import {
   Chips as makeChips,
   ZERO_CHIPS,
@@ -9,14 +9,14 @@ import {
   chipsToNumber,
   seatIndexToNumber,
   SeatIndexOrder,
-} from "./brand.js";
-import type { Player } from "./player.js";
-import { canAct, placeBet, fold as foldPlayer } from "./player.js";
-import type { Action, LegalActions } from "./action.js";
-import { computeLegalActions, validateAction } from "./action.js";
-import type { GameEvent } from "./event.js";
-import { PlayerActed, BettingRoundEnded } from "./event.js";
-import { InvalidAction, NotPlayersTurn } from "./error.js";
+} from "./brand";
+import type { Player } from "./player";
+import { canAct, placeBet, fold as foldPlayer } from "./player";
+import type { Action, LegalActions } from "./action";
+import { computeLegalActions, validateAction } from "./action";
+import type { GameEvent } from "./event";
+import { PlayerActed, BettingRoundEnded } from "./event";
+import { InvalidAction, NotPlayersTurn } from "./error";
 
 // ---------------------------------------------------------------------------
 // BettingRoundState

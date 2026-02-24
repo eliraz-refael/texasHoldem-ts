@@ -9,7 +9,7 @@
  */
 
 import { Array as A, Data, Either, Schema, pipe } from "effect";
-import { InvalidCard } from "./error.js";
+import { InvalidCard } from "./error";
 
 // ---------------------------------------------------------------------------
 // Rank
