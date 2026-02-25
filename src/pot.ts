@@ -115,7 +115,7 @@ export function collectBets(
 function consolidatePots(pots: readonly Pot[]): readonly Pot[] {
   return pipe(
     pots,
-    A.reduce<Pot, Pot[]>([], (acc, pot) => {
+    A.reduce([] as Pot[], (acc, pot) => {
       const prev = A.last(acc);
       if (prev._tag === "Some" && sameSeatSet(prev.value.eligibleSeats, pot.eligibleSeats)) {
         return [
