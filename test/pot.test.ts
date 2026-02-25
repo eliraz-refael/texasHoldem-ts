@@ -80,6 +80,53 @@ describe("collectBets", () => {
     expect(pots[2]!.eligibleSeats).toEqual([SeatIndex(2)]);
   });
 
+  it("fold with unequal bets produces a single pot, not side pots", () => {
+    // Client scenario: SB=5, BB=10, raise to 25, fold
+    const players = [
+      bp(0, 25),                   // raiser (SB)
+      bp(1, 10, { isFolded: true }), // BB folded
+    ];
+    const { pots } = collectBets(players, []);
+
+    expect(pots).toHaveLength(1);
+    expect(chipsToNumber(pots[0]!.amount)).toBe(35);
+    expect(pots[0]!.eligibleSeats).toEqual([SeatIndex(0)]);
+  });
+
+  it("fold at different level with remaining active players produces single pot", () => {
+    // 3 players: one folds at 10, two others bet 30
+    const players = [
+      bp(0, 10, { isFolded: true }),
+      bp(1, 30),
+      bp(2, 30),
+    ];
+    const { pots } = collectBets(players, []);
+
+    expect(pots).toHaveLength(1);
+    expect(chipsToNumber(pots[0]!.amount)).toBe(70);
+    expect([...pots[0]!.eligibleSeats].sort()).toEqual([SeatIndex(1), SeatIndex(2)]);
+  });
+
+  it("all-in still produces correct side pots alongside a fold", () => {
+    // One folds at 10, one all-in at 20, one bets 30
+    const players = [
+      bp(0, 10, { isFolded: true }),
+      bp(1, 20, { isAllIn: true }),
+      bp(2, 30),
+    ];
+    const { pots } = collectBets(players, []);
+
+    expect(pots).toHaveLength(2);
+    // Main pot: 10+20+20 = 50 (folded player excluded), but let me trace:
+    // Iteration 1: minBet=10, pot=30 (10*3), eligible=[1,2]
+    // Iteration 2: minBet=10, pot=20 (10*2), eligible=[1,2] → consolidated with prev = 50
+    // Iteration 3: minBet=10, pot=10 (10*1), eligible=[2]
+    expect(chipsToNumber(pots[0]!.amount)).toBe(50);
+    expect([...pots[0]!.eligibleSeats].sort()).toEqual([SeatIndex(1), SeatIndex(2)]);
+    expect(chipsToNumber(pots[1]!.amount)).toBe(10);
+    expect(pots[1]!.eligibleSeats).toEqual([SeatIndex(2)]);
+  });
+
   it("merges with existing pots when eligible seats match", () => {
     const existingPots: readonly Pot[] = [
       createPot(Chips(200), [SeatIndex(0), SeatIndex(1), SeatIndex(2)]),

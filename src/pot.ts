@@ -92,7 +92,8 @@ export function collectBets(
     newPots.push(createPot(makeChips(potAmount), eligibleSeats));
   }
 
-  const merged = mergePots(existingPots, newPots);
+  const consolidated = consolidatePots(newPots);
+  const merged = mergePots(existingPots, consolidated);
 
   const zeroedPlayers: readonly BettingPlayer[] = pipe(
     mutablePlayers,
@@ -105,6 +106,26 @@ export function collectBets(
   );
 
   return { pots: merged, players: zeroedPlayers };
+}
+
+// ---------------------------------------------------------------------------
+// consolidatePots — merge consecutive pots with identical eligible seats
+// ---------------------------------------------------------------------------
+
+function consolidatePots(pots: readonly Pot[]): readonly Pot[] {
+  return pipe(
+    pots,
+    A.reduce<Pot, Pot[]>([], (acc, pot) => {
+      const prev = A.last(acc);
+      if (prev._tag === "Some" && sameSeatSet(prev.value.eligibleSeats, pot.eligibleSeats)) {
+        return [
+          ...acc.slice(0, -1),
+          createPot(addChips(prev.value.amount, pot.amount), prev.value.eligibleSeats),
+        ];
+      }
+      return [...acc, pot];
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------

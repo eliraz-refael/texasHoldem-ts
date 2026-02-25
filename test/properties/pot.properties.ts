@@ -119,6 +119,25 @@ describe("pot / collectBets — property-based", () => {
     );
   });
 
+  it("no consecutive pots share the same eligible seats", () => {
+    fc.assert(
+      fc.property(arbBettingPlayers, (players) => {
+        const { pots } = collectBets(players, []);
+
+        for (let i = 1; i < pots.length; i++) {
+          const prev = pots[i - 1]!;
+          const curr = pots[i]!;
+          const sortedPrev = [...prev.eligibleSeats].sort();
+          const sortedCurr = [...curr.eligibleSeats].sort();
+          const same =
+            sortedPrev.length === sortedCurr.length &&
+            sortedPrev.every((v, j) => v === sortedCurr[j]);
+          expect(same).toBe(false);
+        }
+      }),
+    );
+  });
+
   it("folded players never appear in any pot's eligibleSeats", () => {
     fc.assert(
       fc.property(arbBettingPlayers, (players) => {
