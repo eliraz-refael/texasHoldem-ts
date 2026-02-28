@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Array as A, pipe } from "effect";
+import { Array as A, Option, pipe } from "effect";
 import type { Chips, SeatIndex } from "./brand";
 import {
   Chips as makeChips,
@@ -113,19 +113,16 @@ export function collectBets(
 // ---------------------------------------------------------------------------
 
 function consolidatePots(pots: readonly Pot[]): readonly Pot[] {
-  return pipe(
-    pots,
-    A.reduce([] as Pot[], (acc, pot) => {
-      const prev = A.last(acc);
-      if (prev._tag === "Some" && sameSeatSet(prev.value.eligibleSeats, pot.eligibleSeats)) {
-        return [
-          ...acc.slice(0, -1),
-          createPot(addChips(prev.value.amount, pot.amount), prev.value.eligibleSeats),
-        ];
-      }
-      return [...acc, pot];
-    }),
-  );
+  return A.reduce(pots, [] as Pot[], (acc, pot) => {
+    const prev = A.last(acc);
+    if (Option.isSome(prev) && sameSeatSet(prev.value.eligibleSeats, pot.eligibleSeats)) {
+      return [
+        ...A.initNonEmpty(acc as [Pot, ...Pot[]]),
+        createPot(addChips(prev.value.amount, pot.amount), prev.value.eligibleSeats),
+      ];
+    }
+    return [...acc, pot];
+  });
 }
 
 // ---------------------------------------------------------------------------
