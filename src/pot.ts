@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Array as A, pipe } from "effect";
+import { Array as A, Option, pipe } from "effect";
 import type { Chips, SeatIndex } from "./brand";
 import {
   Chips as makeChips,
@@ -92,7 +92,8 @@ export function collectBets(
     newPots.push(createPot(makeChips(potAmount), eligibleSeats));
   }
 
-  const merged = mergePots(existingPots, newPots);
+  const consolidated = consolidatePots(newPots);
+  const merged = mergePots(existingPots, consolidated);
 
   const zeroedPlayers: readonly BettingPlayer[] = pipe(
     mutablePlayers,
@@ -105,6 +106,24 @@ export function collectBets(
   );
 
   return { pots: merged, players: zeroedPlayers };
+}
+
+// ---------------------------------------------------------------------------
+// consolidatePots — merge consecutive pots with identical eligible seats
+// ---------------------------------------------------------------------------
+
+function consolidatePots(pots: readonly Pot[]): readonly Pot[] {
+  const empty: Pot[] = [];
+  return A.reduce(pots, empty, (acc, pot) => {
+    const prev = A.last(acc);
+    if (Option.isSome(prev) && sameSeatSet(prev.value.eligibleSeats, pot.eligibleSeats)) {
+      return [
+        ...acc.slice(0, -1),
+        createPot(addChips(prev.value.amount, pot.amount), prev.value.eligibleSeats),
+      ];
+    }
+    return [...acc, pot];
+  });
 }
 
 // ---------------------------------------------------------------------------

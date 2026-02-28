@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Effect, Either, HashMap, Option } from "effect";
+import { Array as A, Effect, Either, HashMap, Option, pipe } from "effect";
 import { SeatIndex, Chips, chipsToNumber } from "../src/brand.js";
 import { Fold, Bet } from "../src/action.js";
 import type { GameEvent } from "../src/event.js";
@@ -109,9 +109,11 @@ describe("onEvent", () => {
 
     expect(events.length).toBeGreaterThan(0);
     // First event should be HandStarted
-    expect(events[0]!._tag).toBe("HandStarted");
+    const first = pipe(events, A.head, Option.getOrThrow);
+    expect(first._tag).toBe("HandStarted");
     // Last event should be HandEnded
-    expect(events[events.length - 1]!._tag).toBe("HandEnded");
+    const last = pipe(events, A.last, Option.getOrThrow);
+    expect(last._tag).toBe("HandEnded");
   });
 });
 
@@ -132,7 +134,7 @@ describe("StrategyContext", () => {
     );
 
     expect(contexts.length).toBeGreaterThan(0);
-    const first = contexts[0]!;
+    const first = pipe(contexts, A.head, Option.getOrThrow);
     expect(first.phase).toBe("Preflop");
     expect(first.activeSeatCount).toBe(4);
     // Role should be one of the valid roles
