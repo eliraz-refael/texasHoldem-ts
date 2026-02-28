@@ -113,11 +113,12 @@ export function collectBets(
 // ---------------------------------------------------------------------------
 
 function consolidatePots(pots: readonly Pot[]): readonly Pot[] {
-  return A.reduce(pots, [] as Pot[], (acc, pot) => {
+  const empty: Pot[] = [];
+  return A.reduce(pots, empty, (acc, pot) => {
     const prev = A.last(acc);
     if (Option.isSome(prev) && sameSeatSet(prev.value.eligibleSeats, pot.eligibleSeats)) {
       return [
-        ...A.initNonEmpty(acc as [Pot, ...Pot[]]),
+        ...acc.slice(0, -1),
         createPot(addChips(prev.value.amount, pot.amount), prev.value.eligibleSeats),
       ];
     }
