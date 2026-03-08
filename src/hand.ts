@@ -28,13 +28,14 @@ import {
   BettingRoundEnded,
   CommunityCardsDealt,
   ShowdownStarted,
+  PlayerRevealed,
   PotAwarded,
   HandEnded,
 } from "./event";
 import type { PokerError } from "./error";
 import { InvalidGameState } from "./error";
 import type { Pot } from "./pot";
-import { collectBets, awardPots } from "./pot";
+import { collectBets, awardPots, clockwiseOrder } from "./pot";
 import type { BettingRoundState } from "./betting";
 import {
   createBettingRound,
@@ -75,6 +76,7 @@ export interface HandState {
   readonly forcedBets: ForcedBets;
   readonly events: readonly GameEvent[];
   readonly seatOrder: readonly SeatIndex[];
+  readonly lastAggressor: Option.Option<SeatIndex>;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +277,7 @@ export function startHand(
       forcedBets,
       events,
       seatOrder,
+      lastAggressor: Option.none(),
     };
   });
 }
@@ -351,6 +354,9 @@ function advancePhase(state: HandState): Either.Either<HandState, PokerError> {
 
   const playersReset = pipe(playersAfterCollect, A.map(collectBet));
 
+  const roundAggressor = pipe(state.bettingRound, Option.flatMap(br => br.lastAggressor));
+  const newLastAggressor = Option.isSome(roundAggressor) ? roundAggressor : state.lastAggressor;
+
   const newEvents: GameEvent[] = [BettingRoundEnded({ round: roundName })];
 
   const baseState: HandState = {
@@ -359,6 +365,7 @@ function advancePhase(state: HandState): Either.Either<HandState, PokerError> {
     pots: collected.pots,
     bettingRound: Option.none(),
     events: [...state.events, ...newEvents],
+    lastAggressor: newLastAggressor,
   };
 
   const activeCount = countActive(playersReset);
@@ -487,7 +494,7 @@ function awardToLastPlayer(state: HandState): Either.Either<HandState, PokerErro
   for (let i = 0; i < state.pots.length; i++) {
     const pot = state.pots[i];
     if (pot === undefined) continue;
-    awardEvents.push(PotAwarded({ seat: winner.seatIndex, amount: pot.amount, potIndex: i }));
+    awardEvents.push(PotAwarded({ seat: winner.seatIndex, amount: pot.amount, potIndex: i, handDescription: "Unopposed", bestCards: [] }));
     currentPlayers = updatePlayer(currentPlayers, winner.seatIndex, (p) =>
       winChips(p, pot.amount),
     );
@@ -507,12 +514,47 @@ function awardToLastPlayer(state: HandState): Either.Either<HandState, PokerErro
 }
 
 // ---------------------------------------------------------------------------
+// getShowdownRevealOrder (internal)
+// ---------------------------------------------------------------------------
+
+function getShowdownRevealOrder(
+  state: HandState,
+): readonly SeatIndex[] {
+  const nonFoldedSeats = state.players
+    .filter((p) => !p.isFolded)
+    .map((p) => p.seatIndex);
+
+  if (nonFoldedSeats.length === 0) return [];
+
+  const cwOrder = clockwiseOrder(state.button, state.seatOrder);
+
+  // Determine start seat: last aggressor if active, otherwise first active clockwise from button
+  let startSeat: SeatIndex;
+  if (Option.isSome(state.lastAggressor) && nonFoldedSeats.includes(state.lastAggressor.value)) {
+    startSeat = state.lastAggressor.value;
+  } else {
+    // First non-folded player clockwise from button
+    const first = cwOrder.find((s) => nonFoldedSeats.includes(s));
+    if (first === undefined) return nonFoldedSeats;
+    startSeat = first;
+  }
+
+  // Return non-folded seats in clockwise order starting from startSeat
+  const startIdx = cwOrder.indexOf(startSeat);
+  if (startIdx === -1) return nonFoldedSeats;
+
+  const rotated = [...cwOrder.slice(startIdx), ...cwOrder.slice(0, startIdx)];
+  return rotated.filter((s) => nonFoldedSeats.includes(s));
+}
+
+// ---------------------------------------------------------------------------
 // performShowdown (internal)
 // ---------------------------------------------------------------------------
 
 function performShowdown(state: HandState): Either.Either<HandState, PokerError> {
   const showdownEvents: GameEvent[] = [ShowdownStarted];
 
+  // Evaluate all non-folded players' hands
   const playerHands = new Map<SeatIndex, HandRank>();
 
   for (const player of state.players) {
@@ -524,6 +566,22 @@ function performShowdown(state: HandState): Either.Either<HandState, PokerError>
     }
   }
 
+  // Emit PlayerRevealed events in showdown order
+  const revealOrder = getShowdownRevealOrder(state);
+  for (const seat of revealOrder) {
+    const player = findPlayer(state.players, seat);
+    if (player === undefined || Option.isNone(player.holeCards)) continue;
+    const hr = playerHands.get(seat);
+    if (hr === undefined) continue;
+    showdownEvents.push(PlayerRevealed({
+      seat,
+      holeCards: player.holeCards.value,
+      handDescription: hr.description,
+      handRank: hr.rank,
+    }));
+  }
+
+  // Award pots (single source of truth for winners)
   const awards = awardPots(
     state.pots,
     playerHands,
@@ -532,36 +590,17 @@ function performShowdown(state: HandState): Either.Either<HandState, PokerError>
   );
 
   let currentPlayers = state.players;
-  let awardIdx = 0;
-  for (let potIdx = 0; potIdx < state.pots.length; potIdx++) {
-    const pot = state.pots[potIdx];
-    if (pot === undefined) continue;
-    const potEligible = pot.eligibleSeats;
-
-    const potContenders = potEligible.filter((s) => playerHands.has(s));
-    if (potContenders.length === 0) continue;
-
-    let bestRank = -Infinity;
-    for (const seat of potContenders) {
-      const hr = playerHands.get(seat);
-      if (hr !== undefined && hr.rank > bestRank) bestRank = hr.rank;
-    }
-    const winnersForPot = potContenders.filter((s) => {
-      const hr = playerHands.get(s);
-      return hr !== undefined && hr.rank === bestRank;
-    });
-
-    for (let w = 0; w < winnersForPot.length; w++) {
-      if (awardIdx < awards.length) {
-        const award = awards[awardIdx];
-        if (award === undefined) break;
-        showdownEvents.push(PotAwarded({ seat: award.seat, amount: award.amount, potIndex: potIdx }));
-        currentPlayers = updatePlayer(currentPlayers, award.seat, (p) =>
-          winChips(p, award.amount),
-        );
-        awardIdx++;
-      }
-    }
+  for (const award of awards) {
+    showdownEvents.push(PotAwarded({
+      seat: award.seat,
+      amount: award.amount,
+      potIndex: award.potIndex,
+      handDescription: award.handRank.description,
+      bestCards: award.handRank.bestCards,
+    }));
+    currentPlayers = updatePlayer(currentPlayers, award.seat, (p) =>
+      winChips(p, award.amount),
+    );
   }
 
   showdownEvents.push(HandEnded);
