@@ -25,7 +25,8 @@ export type GameEvent = Data.TaggedEnum<{
   BettingRoundEnded: { readonly round: string };
   CommunityCardsDealt: { readonly cards: readonly Card[]; readonly phase: string };
   ShowdownStarted: {};
-  PotAwarded: { readonly seat: SeatIndex; readonly amount: Chips; readonly potIndex: number };
+  PlayerRevealed: { readonly seat: SeatIndex; readonly holeCards: readonly [Card, Card]; readonly handDescription: string; readonly handRank: number };
+  PotAwarded: { readonly seat: SeatIndex; readonly amount: Chips; readonly potIndex: number; readonly handDescription: string; readonly bestCards: readonly string[] };
   HandEnded: {};
   PlayerSatDown: { readonly seat: SeatIndex; readonly chips: Chips };
   PlayerStoodUp: { readonly seat: SeatIndex };
@@ -42,6 +43,7 @@ export const PlayerActed = Data.tagged<Extract<GameEvent, { _tag: "PlayerActed" 
 export const BettingRoundEnded = Data.tagged<Extract<GameEvent, { _tag: "BettingRoundEnded" }>>("BettingRoundEnded");
 export const CommunityCardsDealt = Data.tagged<Extract<GameEvent, { _tag: "CommunityCardsDealt" }>>("CommunityCardsDealt");
 export const ShowdownStarted = Data.tagged<Extract<GameEvent, { _tag: "ShowdownStarted" }>>("ShowdownStarted")();
+export const PlayerRevealed = Data.tagged<Extract<GameEvent, { _tag: "PlayerRevealed" }>>("PlayerRevealed");
 export const PotAwarded = Data.tagged<Extract<GameEvent, { _tag: "PotAwarded" }>>("PotAwarded");
 export const HandEnded = Data.tagged<Extract<GameEvent, { _tag: "HandEnded" }>>("HandEnded")();
 export const PlayerSatDown = Data.tagged<Extract<GameEvent, { _tag: "PlayerSatDown" }>>("PlayerSatDown");

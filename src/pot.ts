@@ -178,10 +178,11 @@ export function awardPots(
   playerHands: ReadonlyMap<SeatIndex, HandRank>,
   buttonSeat: SeatIndex,
   seatOrder: readonly SeatIndex[],
-): readonly { seat: SeatIndex; amount: Chips }[] {
-  const awards: { seat: SeatIndex; amount: Chips }[] = [];
+): readonly { seat: SeatIndex; amount: Chips; potIndex: number; handRank: HandRank }[] {
+  const awards: { seat: SeatIndex; amount: Chips; potIndex: number; handRank: HandRank }[] = [];
 
-  for (const pot of pots) {
+  for (let potIndex = 0; potIndex < pots.length; potIndex++) {
+    const pot = pots[potIndex]!;
     const contenders = pipe(
       pot.eligibleSeats,
       A.filter((s) => playerHands.has(s)),
@@ -192,7 +193,8 @@ export function awardPots(
     if (contenders.length === 1) {
       const sole = contenders[0];
       if (sole === undefined) continue;
-      awards.push({ seat: sole, amount: pot.amount });
+      const handRank = playerHands.get(sole)!;
+      awards.push({ seat: sole, amount: pot.amount, potIndex, handRank });
       continue;
     }
 
@@ -225,7 +227,8 @@ export function awardPots(
 
     for (const seat of winnerSeats) {
       const extra = seat === oddChipRecipient ? remainder : 0;
-      awards.push({ seat, amount: makeChips(share + extra) });
+      const handRank = playerHands.get(seat)!;
+      awards.push({ seat, amount: makeChips(share + extra), potIndex, handRank });
     }
   }
 
@@ -233,10 +236,10 @@ export function awardPots(
 }
 
 // ---------------------------------------------------------------------------
-// clockwiseOrder — internal helper
+// clockwiseOrder
 // ---------------------------------------------------------------------------
 
-function clockwiseOrder(
+export function clockwiseOrder(
   buttonSeat: SeatIndex,
   seatOrder: readonly SeatIndex[],
 ): readonly SeatIndex[] {

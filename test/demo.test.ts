@@ -128,8 +128,11 @@ function logEvent(ev: GameEvent) {
     case "ShowdownStarted":
       log(`  Showdown!`);
       break;
+    case "PlayerRevealed":
+      log(`  Seat ${seatIndexToNumber(ev.seat)} shows [${ev.handDescription}]`);
+      break;
     case "PotAwarded":
-      log(`  Seat ${seatIndexToNumber(ev.seat)} wins ${chipsToNumber(ev.amount)} from pot #${ev.potIndex}`);
+      log(`  Seat ${seatIndexToNumber(ev.seat)} wins ${chipsToNumber(ev.amount)} from pot #${ev.potIndex} (${ev.handDescription})`);
       break;
     case "HandEnded":
       log(`  Hand complete`);

@@ -175,6 +175,8 @@ describe("awardPots", () => {
     expect(awards).toHaveLength(1);
     expect(awards[0]!.seat).toBe(SeatIndex(0));
     expect(chipsToNumber(awards[0]!.amount)).toBe(300);
+    expect(awards[0]!.potIndex).toBe(0);
+    expect(awards[0]!.handRank.rank).toBe(5);
   });
 
   it("two-way tie splits evenly", () => {

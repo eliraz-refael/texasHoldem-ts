@@ -329,6 +329,202 @@ describe("hand -- property-based", () => {
     );
   });
 
+  // ---------------------------------------------------------------------------
+  // Showdown reveal properties
+  // ---------------------------------------------------------------------------
+
+  it("reveal completeness: PlayerRevealed count = non-folded players at showdown", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return; // skip non-terminating
+
+          const events = finalState.events;
+          const hasShowdown = events.some((e) => e._tag === "ShowdownStarted");
+          if (!hasShowdown) return; // fold-win, no showdown
+
+          const revealedCount = events.filter((e) => e._tag === "PlayerRevealed").length;
+          const nonFoldedCount = finalState.players.filter((p) => !p.isFolded).length;
+          expect(revealedCount).toBe(nonFoldedCount);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("no folded players are revealed at showdown", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return;
+
+          const foldedSeats = new Set(
+            finalState.players.filter((p) => p.isFolded).map((p) => p.seatIndex),
+          );
+          const revealed = finalState.events.filter((e) => e._tag === "PlayerRevealed");
+          for (const ev of revealed) {
+            if (ev._tag === "PlayerRevealed") {
+              expect(foldedSeats.has(ev.seat)).toBe(false);
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("event ordering: ShowdownStarted → PlayerRevealed → PotAwarded → HandEnded", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return;
+
+          const events = finalState.events;
+          const showdownIdx = events.findIndex((e) => e._tag === "ShowdownStarted");
+          if (showdownIdx === -1) return;
+
+          // After ShowdownStarted, the order should be: PlayerRevealed*, PotAwarded*, HandEnded
+          const afterShowdown = events.slice(showdownIdx + 1);
+          let phase: "reveal" | "award" | "ended" = "reveal";
+          for (const ev of afterShowdown) {
+            if (ev._tag === "PlayerRevealed") {
+              expect(phase).toBe("reveal");
+            } else if (ev._tag === "PotAwarded") {
+              if (phase === "reveal") phase = "award";
+              expect(phase).toBe("award");
+            } else if (ev._tag === "HandEnded") {
+              phase = "ended";
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("PotAwarded.handDescription is non-empty at showdown", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return;
+
+          const hasShowdown = finalState.events.some((e) => e._tag === "ShowdownStarted");
+          if (!hasShowdown) return;
+
+          const potAwards = finalState.events.filter((e) => e._tag === "PotAwarded");
+          for (const ev of potAwards) {
+            if (ev._tag === "PotAwarded") {
+              expect(ev.handDescription.length).toBeGreaterThan(0);
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("PotAwarded.bestCards is non-empty at showdown", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return;
+
+          const hasShowdown = finalState.events.some((e) => e._tag === "ShowdownStarted");
+          if (!hasShowdown) return;
+
+          const potAwards = finalState.events.filter((e) => e._tag === "PotAwarded");
+          for (const ev of potAwards) {
+            if (ev._tag === "PotAwarded") {
+              expect(ev.bestCards.length).toBeGreaterThan(0);
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("fold-win: no PlayerRevealed events", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return;
+
+          const hasShowdown = finalState.events.some((e) => e._tag === "ShowdownStarted");
+          if (hasShowdown) return; // skip showdown hands
+
+          const revealed = finalState.events.filter((e) => e._tag === "PlayerRevealed");
+          expect(revealed).toHaveLength(0);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("fold-win: PotAwarded.handDescription = 'Unopposed'", () => {
+    fc.assert(
+      fc.property(
+        arbStartedHand,
+        fc.array(fc.integer({ min: 0, max: 1000 }), { minLength: 60, maxLength: 60 }),
+        (params, choices) => {
+          const state = runStart(params);
+          const maxActions = params.players.length * 20;
+          const { states } = playToCompletion(state, choices, maxActions);
+          const finalState = states[states.length - 1]!;
+          if (!isComplete(finalState)) return;
+
+          const hasShowdown = finalState.events.some((e) => e._tag === "ShowdownStarted");
+          if (hasShowdown) return; // skip showdown hands
+
+          const potAwards = finalState.events.filter((e) => e._tag === "PotAwarded");
+          for (const ev of potAwards) {
+            if (ev._tag === "PotAwarded") {
+              expect(ev.handDescription).toBe("Unopposed");
+              expect(ev.bestCards).toEqual([]);
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
   it("startHand with <2 players fails", () => {
     fc.assert(
       fc.property(
