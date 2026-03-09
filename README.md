@@ -348,6 +348,8 @@ At showdown, the engine emits events in this order:
 
 When a hand ends via fold (no showdown), `PotAwarded` has `handDescription: "Unopposed"` and `bestCards: []`, and no `PlayerRevealed` events are emitted.
 
+> **Breaking change (v1.1.0):** `PotAwarded` now has two additional required fields: `handDescription: string` and `bestCards: readonly string[]`. Any code that pattern-matches or destructures `PotAwarded` events will need updating.
+
 Use `state.events` for table-level events, or the `onEvent` callback in the game loop for real-time streaming.
 
 ## Effect-TS Usage
