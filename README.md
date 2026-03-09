@@ -10,6 +10,7 @@ Immutable state transitions, typed errors, branded domain types, and event loggi
 - **Typed errors** — `Data.TaggedError` hierarchy for exhaustive pattern matching
 - **Branded types** — `Chips`, `SeatIndex`, `HandId` prevent mixing up numbers at compile time
 - **Event log** — every game action is recorded as a `GameEvent` for hand history / observability
+- **Showdown reveal** — emits `PlayerRevealed` events with hole cards and hand descriptions in correct poker order (last aggressor first), and enriches `PotAwarded` with winning hand info
 - **Automatic phase advancement** — betting round completion triggers the next phase (deal, showdown) automatically
 - **Side pots** — correct multi-way all-in pot splitting with odd-chip distribution
 - **Configurable** — 2-10 seat tables, custom blinds/antes
@@ -325,9 +326,27 @@ type GameEvent =
   | HandStarted | BlindsPosted | HoleCardsDealt
   | PlayerActed | BettingRoundEnded
   | CommunityCardsDealt | ShowdownStarted
-  | PotAwarded | HandEnded
+  | PlayerRevealed | PotAwarded | HandEnded
   | PlayerSatDown | PlayerStoodUp
 ```
+
+#### Showdown Events
+
+At showdown, the engine emits events in this order:
+
+1. **`ShowdownStarted`**
+2. **`PlayerRevealed`** (one per non-folded player, in poker reveal order — last aggressor first, then clockwise from button)
+   - `seat` — player's seat
+   - `holeCards` — their two cards
+   - `handDescription` — e.g. `"Two Pair, A's & K's"`
+   - `handRank` — numeric rank for sorting
+3. **`PotAwarded`** (enriched with winning hand info)
+   - `seat`, `amount`, `potIndex` — who won how much from which pot
+   - `handDescription` — e.g. `"Flush, Ace High"`
+   - `bestCards` — the 5-card winning hand, e.g. `["As", "Ks", "Qs", "Js", "9s"]`
+4. **`HandEnded`**
+
+When a hand ends via fold (no showdown), `PotAwarded` has `handDescription: "Unopposed"` and `bestCards: []`, and no `PlayerRevealed` events are emitted.
 
 Use `state.events` for table-level events, or the `onEvent` callback in the game loop for real-time streaming.
 
@@ -353,7 +372,7 @@ pnpm test:watch    # watch mode
 pnpm typecheck     # tsc --noEmit
 ```
 
-132 tests across 21 files:
+174 tests across 24 files:
 - **Unit tests** — focused scenarios per module
 - **Property-based tests** — fast-check verifies invariants (chip conservation, betting termination, phase progression) across thousands of random inputs
 - **Integration tests** — end-to-end scenarios through the public API
