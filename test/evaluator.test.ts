@@ -91,6 +91,34 @@ describe("compare", () => {
     const flush2 = evalOrThrow("Ad", "9d", "7d", "5d", "3d");
     expect(compare(flush1, flush2)).toBe(0);
   });
+
+  it("pair of 4s beats pair of 3s (same category, different value)", () => {
+    const pair3 = evalOrThrow("3h", "3d", "7c", "8s", "Jd");
+    const pair4 = evalOrThrow("4h", "4d", "7c", "8s", "Jd");
+    expect(pair3.rank).toBe(pair4.rank); // same category
+    expect(compare(pair4, pair3)).toBe(1);
+    expect(compare(pair3, pair4)).toBe(-1);
+  });
+
+  it("same pair, higher kicker wins", () => {
+    const kingsWithAce = evalOrThrow("Kh", "Kd", "Ac", "5s", "3d");
+    const kingsWithQueen = evalOrThrow("Kc", "Ks", "Qc", "5h", "3h");
+    expect(kingsWithAce.rank).toBe(kingsWithQueen.rank);
+    expect(compare(kingsWithAce, kingsWithQueen)).toBe(1);
+  });
+
+  it("identical hands (same values, different suits) tie", () => {
+    const pair1 = evalOrThrow("Kh", "Kd", "Ac", "Qs", "Jd");
+    const pair2 = evalOrThrow("Kc", "Ks", "Ah", "Qd", "Jc");
+    expect(compare(pair1, pair2)).toBe(0);
+  });
+
+  it("higher flush beats lower flush", () => {
+    const highFlush = evalOrThrow("Ah", "Kh", "9h", "5h", "3h");
+    const lowFlush = evalOrThrow("Kd", "Qd", "9d", "5d", "3d");
+    expect(highFlush.rank).toBe(lowFlush.rank);
+    expect(compare(highFlush, lowFlush)).toBe(1);
+  });
 });
 
 describe("winners", () => {
@@ -116,6 +144,23 @@ describe("winners", () => {
     expect(result).toHaveLength(2);
     expect(result).toContain(flush1);
     expect(result).toContain(flush2);
+  });
+
+  it("picks the better hand within same category (pair of 4s > pair of 3s)", () => {
+    const pair3 = evalOrThrow("3h", "3d", "7c", "8s", "Jd");
+    const pair4 = evalOrThrow("4h", "4d", "7c", "8s", "Jd");
+
+    const result = winners([pair3, pair4]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(pair4);
+  });
+
+  it("same pair with identical kickers splits", () => {
+    const pair1 = evalOrThrow("Kh", "Kd", "Ac", "Qs", "Jd");
+    const pair2 = evalOrThrow("Kc", "Ks", "Ah", "Qd", "Jc");
+
+    const result = winners([pair1, pair2]);
+    expect(result).toHaveLength(2);
   });
 });
 
