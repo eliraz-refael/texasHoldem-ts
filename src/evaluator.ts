@@ -1,5 +1,6 @@
 import { Array as A, Either, Order, pipe } from "effect";
 import pokersolver from "pokersolver";
+import type { Hand } from "pokersolver";
 const { Hand: PokersolverHand } = pokersolver;
 import type { Card } from "./card";
 import { toPokersolverString } from "./card";
@@ -14,8 +15,8 @@ export interface HandRank {
   readonly description: string;
   readonly rank: number;
   readonly bestCards: readonly string[];
-  /** @internal Opaque pokersolver Hand object for accurate intra-category comparison. */
-  readonly _solved?: unknown;
+  /** @internal pokersolver Hand object for accurate intra-category comparison. */
+  readonly _solved?: Hand;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,9 +68,7 @@ export function compare(a: HandRank, b: HandRank): -1 | 0 | 1 {
 
   // Same category: use pokersolver for intra-category comparison (kickers, pair values, etc.)
   if (a._solved && b._solved) {
-    const ws = PokersolverHand.winners(
-      [a._solved, b._solved] as InstanceType<typeof PokersolverHand>[],
-    );
+    const ws = PokersolverHand.winners([a._solved, b._solved]);
     if (ws.length === 2) return 0;
     return ws[0] === a._solved ? 1 : -1;
   }
@@ -86,13 +85,10 @@ export function winners(hands: readonly HandRank[]): readonly HandRank[] {
   if (hands.length === 0) return [];
 
   // When all hands carry pokersolver objects, delegate to Hand.winners() for full accuracy
-  const allSolved = hands.every((h) => h._solved != null);
-  if (allSolved) {
-    const psWinners = PokersolverHand.winners(
-      hands.map((h) => h._solved) as InstanceType<typeof PokersolverHand>[],
-    );
-    const winnerSet = new Set(psWinners);
-    return hands.filter((h) => winnerSet.has(h._solved as InstanceType<typeof PokersolverHand>));
+  const solvedObjects = hands.map((h) => h._solved).filter((s) => s != null);
+  if (solvedObjects.length === hands.length) {
+    const psWinners = new Set(PokersolverHand.winners(solvedObjects));
+    return hands.filter((h) => h._solved != null && psWinners.has(h._solved));
   }
 
   // Fallback for test data without _solved
