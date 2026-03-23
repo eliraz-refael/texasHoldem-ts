@@ -14,6 +14,8 @@ export interface HandRank {
   readonly description: string;
   readonly rank: number;
   readonly bestCards: readonly string[];
+  /** @internal Opaque pokersolver Hand object for accurate intra-category comparison. */
+  readonly _solved?: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,7 @@ export function evaluate(
         bestCards: Object.freeze(
           solved.cards.map((c) => `${c.value}${c.suit}`),
         ),
+        _solved: solved,
       };
     },
     catch: (e) =>
@@ -59,7 +62,20 @@ export function evaluate(
 // ---------------------------------------------------------------------------
 
 export function compare(a: HandRank, b: HandRank): -1 | 0 | 1 {
-  return HandRankOrder(a, b);
+  // Fast path: different categories are unambiguous
+  if (a.rank !== b.rank) return HandRankOrder(a, b);
+
+  // Same category: use pokersolver for intra-category comparison (kickers, pair values, etc.)
+  if (a._solved && b._solved) {
+    const ws = PokersolverHand.winners(
+      [a._solved, b._solved] as InstanceType<typeof PokersolverHand>[],
+    );
+    if (ws.length === 2) return 0;
+    return ws[0] === a._solved ? 1 : -1;
+  }
+
+  // Fallback: category-only (for test data without _solved)
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,16 +83,25 @@ export function compare(a: HandRank, b: HandRank): -1 | 0 | 1 {
 // ---------------------------------------------------------------------------
 
 export function winners(hands: readonly HandRank[]): readonly HandRank[] {
+  if (hands.length === 0) return [];
+
+  // When all hands carry pokersolver objects, delegate to Hand.winners() for full accuracy
+  const allSolved = hands.every((h) => h._solved != null);
+  if (allSolved) {
+    const psWinners = PokersolverHand.winners(
+      hands.map((h) => h._solved) as InstanceType<typeof PokersolverHand>[],
+    );
+    const winnerSet = new Set(psWinners);
+    return hands.filter((h) => winnerSet.has(h._solved as InstanceType<typeof PokersolverHand>));
+  }
+
+  // Fallback for test data without _solved
   const [first, ...rest] = hands;
   if (first === undefined) return [];
-
   const best = pipe(
     rest,
-    A.reduce(first, (acc, h) =>
-      Order.greaterThan(HandRankOrder)(h, acc) ? h : acc,
-    ),
+    A.reduce(first, (acc, h) => (compare(h, acc) === 1 ? h : acc)),
   );
-
   return pipe(
     hands,
     A.filter((h) => compare(h, best) === 0),

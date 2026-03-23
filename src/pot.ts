@@ -13,6 +13,7 @@ import {
   chipsToNumber,
   SeatIndexOrder,
 } from "./brand";
+import { compare } from "./evaluator";
 import type { HandRank } from "./evaluator";
 
 // ---------------------------------------------------------------------------
@@ -198,23 +199,22 @@ export function awardPots(
       continue;
     }
 
-    // Find best hand rank using HandRankOrder
-    const bestRank = pipe(
-      contenders,
-      A.reduce(-Infinity, (best, seat) => {
-        const hand = playerHands.get(seat);
-        if (hand === undefined) return best;
-        return hand.rank > best ? hand.rank : best;
-      }),
-    );
+    // Find winners using full hand comparison (not just category rank)
+    const contenderHands = contenders
+      .map((seat) => ({ seat, hand: playerHands.get(seat)! }))
+      .filter((h) => h.hand !== undefined);
 
-    const winnerSeats = pipe(
-      contenders,
-      A.filter((s) => {
-        const hand = playerHands.get(s);
-        return hand !== undefined && hand.rank === bestRank;
-      }),
-    );
+    let best = contenderHands[0]!;
+    for (let i = 1; i < contenderHands.length; i++) {
+      const current = contenderHands[i]!;
+      if (compare(current.hand, best.hand) === 1) {
+        best = current;
+      }
+    }
+
+    const winnerSeats = contenderHands
+      .filter((h) => compare(h.hand, best.hand) === 0)
+      .map((h) => h.seat);
 
     const potAmount = chipsToNumber(pot.amount);
     const share = Math.floor(potAmount / winnerSeats.length);

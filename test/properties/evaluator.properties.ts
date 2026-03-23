@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { Either } from "effect";
-import { evaluate, compare } from "../../src/evaluator.js";
+import { evaluate, compare, winners } from "../../src/evaluator.js";
 import type { HandRank } from "../../src/evaluator.js";
 import { ALL_CARDS, card } from "../../src/card.js";
 import type { Card } from "../../src/card.js";
@@ -114,6 +114,89 @@ describe("evaluator -- property-based", () => {
           expect(hr.bestCards.length).toBeGreaterThan(0);
         }
       }),
+    );
+  });
+
+  it("same-category hands: better cards always win or tie, never lose to worse", () => {
+    // Generate two distinct 5-card hands from the same deck
+    fc.assert(
+      fc.property(
+        fc.shuffledSubarray([...ALL_CARDS], { minLength: 10, maxLength: 10 }),
+        (tenCards) => {
+          const hand1 = tenCards.slice(0, 5);
+          const hand2 = tenCards.slice(5, 10);
+          const a = evalOrThrow(hand1);
+          const b = evalOrThrow(hand2);
+
+          // Only test same-category pairs
+          if (a.rank !== b.rank) return;
+
+          const cmp = compare(a, b);
+          const rev = compare(b, a);
+
+          // Antisymmetric within same category
+          expect(cmp + rev).toBe(0);
+
+          // If a beats b, winners() should agree
+          if (cmp === 1) {
+            const ws = winners([a, b]);
+            expect(ws).toHaveLength(1);
+            expect(ws[0]).toBe(a);
+          } else if (cmp === -1) {
+            const ws = winners([a, b]);
+            expect(ws).toHaveLength(1);
+            expect(ws[0]).toBe(b);
+          } else {
+            const ws = winners([a, b]);
+            expect(ws).toHaveLength(2);
+          }
+        },
+      ),
+    );
+  });
+
+  it("winners() always returns a non-empty subset of input", () => {
+    fc.assert(
+      fc.property(
+        fc.array(arbHand5, { minLength: 1, maxLength: 5 }),
+        (hands) => {
+          const evaluated = hands.map((h) => evalOrThrow(h));
+          const ws = winners(evaluated);
+
+          expect(ws.length).toBeGreaterThanOrEqual(1);
+          expect(ws.length).toBeLessThanOrEqual(evaluated.length);
+          for (const w of ws) {
+            expect(evaluated).toContain(w);
+          }
+        },
+      ),
+    );
+  });
+
+  it("winners() result all compare equal to each other", () => {
+    fc.assert(
+      fc.property(
+        fc.array(arbHand5, { minLength: 2, maxLength: 5 }),
+        (hands) => {
+          const evaluated = hands.map((h) => evalOrThrow(h));
+          const ws = winners(evaluated);
+
+          // All winners should compare as equal
+          for (let i = 0; i < ws.length; i++) {
+            for (let j = i + 1; j < ws.length; j++) {
+              expect(compare(ws[i]!, ws[j]!)).toBe(0);
+            }
+          }
+
+          // Each winner should beat or tie every non-winner
+          const nonWinners = evaluated.filter((h) => !ws.includes(h));
+          for (const w of ws) {
+            for (const nw of nonWinners) {
+              expect(compare(w, nw)).toBe(1);
+            }
+          }
+        },
+      ),
     );
   });
 });

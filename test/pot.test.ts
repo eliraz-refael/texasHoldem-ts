@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { Chips, SeatIndex, chipsToNumber } from "../src/brand.js";
 import type { BettingPlayer, Pot } from "../src/pot.js";
 import { collectBets, awardPots, totalPotSize, createPot } from "../src/pot.js";
+import { evaluate } from "../src/evaluator.js";
 import type { HandRank } from "../src/evaluator.js";
+import { unsafeCardFromString } from "../src/card.js";
+import { Either } from "effect";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -216,6 +219,59 @@ describe("awardPots", () => {
 
     expect(chipsToNumber(seat2Award.amount)).toBe(151);
     expect(chipsToNumber(seat0Award.amount)).toBe(150);
+  });
+
+  // --- Regression tests for intra-category hand comparison bug ---
+
+  function realHand(...strs: string[]): HandRank {
+    const result = evaluate(strs.map(unsafeCardFromString));
+    if (Either.isLeft(result)) throw new Error(result.left.reason);
+    return result.right;
+  }
+
+  it("pair of 4s beats pair of 3s — no split (regression)", () => {
+    const pots: readonly Pot[] = [
+      createPot(Chips(300), [SeatIndex(0), SeatIndex(1)]),
+    ];
+    const hands = new Map<SeatIndex, HandRank>([
+      [SeatIndex(0), realHand("3h", "3d", "7c", "8s", "Jd")],
+      [SeatIndex(1), realHand("4h", "4d", "7c", "8s", "Jd")],
+    ]);
+
+    const awards = awardPots(pots, hands, SeatIndex(0), seatOrder);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]!.seat).toBe(SeatIndex(1));
+    expect(chipsToNumber(awards[0]!.amount)).toBe(300);
+  });
+
+  it("same pair, higher kicker wins — no split (regression)", () => {
+    const pots: readonly Pot[] = [
+      createPot(Chips(500), [SeatIndex(0), SeatIndex(1)]),
+    ];
+    const hands = new Map<SeatIndex, HandRank>([
+      [SeatIndex(0), realHand("Kh", "Kd", "Ac", "5s", "3d")],
+      [SeatIndex(1), realHand("Kc", "Ks", "Qc", "5h", "3h")],
+    ]);
+
+    const awards = awardPots(pots, hands, SeatIndex(0), seatOrder);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]!.seat).toBe(SeatIndex(0));
+    expect(chipsToNumber(awards[0]!.amount)).toBe(500);
+  });
+
+  it("identical hands split correctly (regression)", () => {
+    const pots: readonly Pot[] = [
+      createPot(Chips(400), [SeatIndex(0), SeatIndex(1)]),
+    ];
+    const hands = new Map<SeatIndex, HandRank>([
+      [SeatIndex(0), realHand("Kh", "Kd", "Ac", "Qs", "Jd")],
+      [SeatIndex(1), realHand("Kc", "Ks", "Ah", "Qd", "Jc")],
+    ]);
+
+    const awards = awardPots(pots, hands, SeatIndex(0), seatOrder);
+    expect(awards).toHaveLength(2);
+    expect(chipsToNumber(awards[0]!.amount)).toBe(200);
+    expect(chipsToNumber(awards[1]!.amount)).toBe(200);
   });
 
 });
